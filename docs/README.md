@@ -10,6 +10,7 @@
 | [overview.md](overview.md) | 目的・スコープ・非スコープ・用語（left/right の定義） |
 | [architecture.md](architecture.md) | 技術スタック・ディレクトリ構成・リクエストのデータフロー |
 | [api.md](api.md) | HTTP API 仕様（predict / label / projects / admin / healthz・リクエスト/レスポンス例） |
+| [usage.md](usage.md) | API 利用ガイド（呼ぶ側の how-to・curl/Python/TS 例・判定→確認修正→修正フロー） |
 | [model.md](model.md) | 判定モデル（DINOv2 埋め込み・k-NN・flip 拡張・confidence・前処理・モデル検討） |
 | [database.md](database.md) | SQLite スキーマ・画像/埋め込みの保存・マイグレーション方針 |
 | [multi-tenant.md](multi-tenant.md) | project キーによるテナント分離・API キー発行と検証 |

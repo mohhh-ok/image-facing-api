@@ -1,0 +1,18 @@
+# railway up のアップロード対象から除外（Docker ビルドに不要・重いもの）。
+# models/ は除外しない（dinov2_vits14.onnx をイメージに焼くため送る）。
+.venv/
+venv/
+data/
+.git/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+tests/
+.env
+.env.*
+.DS_Store
+.idea/
+.vscode/

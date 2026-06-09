@@ -35,7 +35,7 @@ SQLite 単一ファイル（`/data/facing.db`・WAL モード）。全 SQL は `
 | source | TEXT | `'human' \| 'import' \| 'model'` 等。human 最優先 |
 | is_flip_aug | INTEGER | 0/1。1 = flip 拡張で自動生成された逆ラベル行 |
 | origin_sample_id | INTEGER | flip 行が元にした sample.id（二重カウント抑制・再生成用）。元行は NULL |
-| external_id | TEXT | クライアント側識別子（任意・再ラベル突合用） |
+| external_id | TEXT | クライアント側識別子（任意・保存のみ。突合は image_sha256 で行う） |
 | created_at | TEXT | |
 | updated_at | TEXT | facing 更新時刻 |
 

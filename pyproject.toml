@@ -1,0 +1,41 @@
+[project]
+name = "ai-facing-api"
+version = "0.1.0"
+description = "汎用の left/right 向き判定マイクロサービス（DINOv2 埋め込み + k-NN）"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "onnxruntime>=1.18",
+    "pillow>=10.3",
+    "numpy>=1.26",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+# 本番ランタイムには入れない。ONNX 変換スクリプト（scripts/export_dinov2_onnx.py）専用。
+export = [
+    "torch>=2.2",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["app", "app.routes"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

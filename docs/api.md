@@ -54,7 +54,7 @@
 {
   "image_base64": "iVBORw0KGgo...",
   "facing": "right",
-  "external_id": "yokai-51",     // 任意。クライアント側の識別子（再ラベル時に突合）
+  "external_id": "yokai-51",     // 任意。クライアント側の識別子（DB に保存するだけ。突合には使わない）
   "source": "human"               // 任意。"human" | "import" | "model" など。既定 "human"
 }
 ```

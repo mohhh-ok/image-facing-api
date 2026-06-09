@@ -1,0 +1,2 @@
+# 埋め込み ONNX（dinov2_vits14.onnx）はここに置く。
+# .gitignore で *.onnx を除外しているので、Git LFS かビルド時取得で同梱すること（docs/deploy.md）。

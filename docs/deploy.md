@@ -1,5 +1,8 @@
 # デプロイ（Railway）
 
+本番エンドポイント: `https://facing-api-production.up.railway.app`（Railway project `ai` / service `facing-api`）。
+API キー・admin パスワードはリポに置かない（Railway の環境変数と各自の `.env` のみ）。
+
 ## 方針
 
 - Railway で Dockerfile ビルド。**ボリュームを `/data` にマウント**（SQLite・画像・埋め込みの永続化）。

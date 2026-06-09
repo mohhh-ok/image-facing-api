@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>facing-api admin</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; margin: 1.5rem; }
+    h1 { font-size: 1.2rem; }
+    .projects a { margin-right: .75rem; }
+    .projects a.active { font-weight: 700; text-decoration: underline; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .card { border: 1px solid #8884; border-radius: 8px; padding: .5rem; text-align: center; }
+    .thumb { width: 150px; height: 150px; object-fit: contain; background: #8881; }
+    /* left に揃えて並べると外れ値が目立つ: right のものを表示反転して全部左向きに見せる */
+    .face-right .thumb { transform: scaleX(-1); }
+    .toggle { display: flex; gap: .25rem; margin-top: .4rem; }
+    .toggle button { flex: 1; padding: .3rem; cursor: pointer; }
+    .toggle button.on { background: #4a90d9; color: #fff; border-color: #4a90d9; }
+    .meta { font-size: .75rem; opacity: .7; margin-top: .25rem; }
+    form.inline { display: contents; }
+  </style>
+</head>
+<body>
+  <h1>facing-api admin</h1>
+
+  <div class="projects">
+    project:
+    {% for p in projects %}
+      <a href="/admin?project={{ p.name }}{% if show_flip %}&show_flip=true{% endif %}"
+         class="{% if p.name == selected %}active{% endif %}">{{ p.name }}</a>
+    {% else %}
+      <em>（project がまだありません）</em>
+    {% endfor %}
+  </div>
+
+  {% if selected %}
+    <p>
+      <a href="/admin?project={{ selected }}{% if not show_flip %}&show_flip=true{% endif %}">
+        {% if show_flip %}flip 拡張を隠す{% else %}flip 拡張も表示{% endif %}
+      </a>
+      ・ {{ samples|length }} 件
+    </p>
+
+    <div class="grid">
+      {% for s in samples %}
+        <div class="card {% if s.facing == 'right' %}face-right{% endif %}">
+          <img class="thumb" src="/admin/image/{{ s.image_sha256 }}" alt="sample {{ s.id }}" loading="lazy">
+          <div class="toggle">
+            <form class="inline" method="post" action="/admin/correct">
+              <input type="hidden" name="project" value="{{ selected }}">
+              <input type="hidden" name="sample_id" value="{{ s.id }}">
+              <input type="hidden" name="show_flip" value="{{ 'true' if show_flip else 'false' }}">
+              <button type="submit" name="facing" value="left" class="{% if s.facing == 'left' %}on{% endif %}">← left</button>
+              <button type="submit" name="facing" value="right" class="{% if s.facing == 'right' %}on{% endif %}">right →</button>
+            </form>
+          </div>
+          <div class="meta">
+            #{{ s.id }} · {{ s.source }}{% if s.is_flip_aug %} · flip{% endif %}
+          </div>
+        </div>
+      {% else %}
+        <p>サンプルがありません。</p>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>project を選んでください。</p>
+  {% endif %}
+</body>
+</html>
