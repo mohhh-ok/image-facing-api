@@ -6,11 +6,19 @@ from __future__ import annotations
 class AppError(Exception):
     """API が返す業務エラー。`{"error": {"code", "message"}}` 形式に整形される。"""
 
-    def __init__(self, status_code: int, code: str, message: str) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.code = code
         self.message = message
+        # 追加で返したい HTTP ヘッダ（例: admin の WWW-Authenticate: Basic）。
+        self.headers = headers
 
 
 # docs/api.md のコード表に対応したショートカット。
@@ -22,8 +30,10 @@ def bad_request(message: str) -> AppError:
     return AppError(400, "bad_request", message)
 
 
-def unauthorized(message: str = "認証が必要です") -> AppError:
-    return AppError(401, "unauthorized", message)
+def unauthorized(
+    message: str = "認証が必要です", headers: dict[str, str] | None = None
+) -> AppError:
+    return AppError(401, "unauthorized", message, headers=headers)
 
 
 def forbidden(message: str = "この project へのアクセス権がありません") -> AppError:

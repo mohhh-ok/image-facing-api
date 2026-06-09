@@ -47,19 +47,23 @@ def require_admin(request: Request) -> None:
         # 認証情報が未設定なら開けない（安全側）。
         raise unauthorized("admin 認証が構成されていません")
 
+    # ブラウザに Basic 認証ダイアログを出させるためのヘッダ。
+    # これが無いと 401 でも資格情報の入力プロンプトが表示されない。
+    challenge = {"WWW-Authenticate": 'Basic realm="admin"'}
+
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("basic "):
-        raise unauthorized("Basic 認証が必要です")
+        raise unauthorized("Basic 認証が必要です", headers=challenge)
     try:
         decoded = base64.b64decode(header[6:]).decode("utf-8")
         user, _, password = decoded.partition(":")
     except Exception as exc:
-        raise unauthorized("Basic 認証ヘッダが不正です") from exc
+        raise unauthorized("Basic 認証ヘッダが不正です", headers=challenge) from exc
 
     ok_user = secrets.compare_digest(user, settings.admin_user)
     ok_pass = secrets.compare_digest(password, settings.admin_pass)
     if not (ok_user and ok_pass):
-        raise unauthorized("admin 認証に失敗しました")
+        raise unauthorized("admin 認証に失敗しました", headers=challenge)
 
 
 def verify_same_origin(request: Request) -> None:
