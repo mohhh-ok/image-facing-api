@@ -14,10 +14,10 @@ venv/
 .ruff_cache/
 .mypy_cache/
 
-# モデル（大きい）。Railway CLI デプロイ（railway up）でアップロードするため、
-# あえて gitignore しない（除外すると railway up が拾わず COPY models/ が失敗する）。
-# ただし git には add/commit しないこと（80MB）。GitHub 連携に切り替える場合は Git LFS 管理に。
-# models/*.onnx
+# モデル（大きい）。git では無視（誤コミット防止）。
+# Railway へは `railway up --no-gitignore` でアップロードする（.railwayignore が .venv/data/.env 等を除外）。
+# .gitignore のみ尊重する素の `railway up` だと onnx が載らず model_loaded:false になるので注意。
+models/*.onnx
 
 # OS / エディタ
 .DS_Store

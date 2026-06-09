@@ -3,6 +3,11 @@
 本番エンドポイント: `https://facing-api-production.up.railway.app`（Railway project `ai` / service `facing-api`）。
 API キー・admin パスワードはリポに置かない（Railway の環境変数と各自の `.env` のみ）。
 
+デプロイは **`railway up --no-gitignore`**。`models/*.onnx` は `.gitignore` で git からは除外している
+（誤コミット防止）が、素の `railway up` は `.gitignore`/`.git/info/exclude` を尊重して onnx を載せないため
+`model_loaded:false` になる。`--no-gitignore` で .gitignore を無視しつつ `.railwayignore`（`.venv`/`data`/`.env` 等を除外）
+でアップロード対象を絞る。`.env` は `.railwayignore` で除外し、かつ Dockerfile も COPY しないのでイメージに入らない。
+
 ## 方針
 
 - Railway で Dockerfile ビルド。**ボリュームを `/data` にマウント**（SQLite・画像・埋め込みの永続化）。
