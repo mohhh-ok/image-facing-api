@@ -5,6 +5,9 @@
 
 全エンドポイント共通:
 - 画像の渡し方は **3 通り対応**（どれか1つ）: `multipart/form-data` のファイル、JSON の `image_base64`、JSON の `image_url`。
+- **画像フォーマットはサーバが自動判別する**。Pillow がマジックバイトから形式（JPEG / PNG / WebP / GIF など）を判定してデコードするので、
+  クライアントは**送る前に PNG 等へ変換する必要はない**。生成・取得したバイト列をそのまま送ればよい
+  （非対応形式・壊れた画像は `bad_image` で弾く → [security.md](security.md)）。
 - 認証: サービス間呼び出しは `X-API-Key` ヘッダ（project に紐づくキー）。admin UI は Basic 認証。
 - エラーは `{"error": {"code": "...", "message": "..."}}` 形式・適切な HTTP ステータス。
 
