@@ -197,6 +197,43 @@ def test_admin_correct_flows_through(client, admin_auth):
     assert _predict(client, "proj", key, "left").json()["facing"] == "right"
 
 
+def test_admin_correct_rejects_cross_origin(client, admin_auth):
+    key = create_project(client, admin_auth)
+    sample_id = _label(client, "proj", key, "left", "left").json()["sample_id"]
+    resp = client.post(
+        "/admin/correct",
+        data={"project": "proj", "sample_id": str(sample_id), "facing": "right"},
+        auth=admin_auth,
+        headers={"Origin": "http://evil.example"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "forbidden"
+
+
+def test_admin_correct_allows_same_origin(client, admin_auth):
+    key = create_project(client, admin_auth)
+    sample_id = _label(client, "proj", key, "left", "left").json()["sample_id"]
+    resp = client.post(
+        "/admin/correct",
+        data={"project": "proj", "sample_id": str(sample_id), "facing": "right"},
+        auth=admin_auth,
+        headers={"Origin": "http://testserver"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+
+def test_create_project_rejects_cross_origin(client, admin_auth):
+    resp = client.post(
+        "/v1/projects",
+        json={"name": "x"},
+        auth=admin_auth,
+        headers={"Origin": "http://evil.example"},
+    )
+    assert resp.status_code == 403
+
+
 def test_auth_disabled_bypass(app_factory):
     with TestClient(app_factory(True)) as c:
         # admin 認証なしで project 作成できる

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from ..auth import require_admin
+from ..auth import require_admin, verify_same_origin
 from ..deps import get_service
 from ..errors import bad_request
 
@@ -49,7 +49,7 @@ def admin_home(request: Request, project: str | None = None, show_flip: bool = F
     )
 
 
-@router.post("/correct")
+@router.post("/correct", dependencies=[Depends(verify_same_origin)])
 def admin_correct(
     request: Request,
     project: str = Form(...),

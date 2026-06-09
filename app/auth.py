@@ -11,6 +11,7 @@ import base64
 import hashlib
 import secrets
 import sqlite3
+from urllib.parse import urlparse
 
 from fastapi import Request
 
@@ -59,6 +60,22 @@ def require_admin(request: Request) -> None:
     ok_pass = secrets.compare_digest(password, settings.admin_pass)
     if not (ok_user and ok_pass):
         raise unauthorized("admin 認証に失敗しました")
+
+
+def verify_same_origin(request: Request) -> None:
+    """ブラウザ起点の状態変更に対する CSRF 対策（docs/security.md）。
+
+    Basic 認証はブラウザが資格情報を自動送信するため、悪意あるサイトのフォームから
+    admin の状態変更を誘発できる。Origin/Referer があれば**同一オリジン**を要求する。
+    これらが無いリクエスト（curl 等のサービス間呼び出し）は CSRF の文脈ではないので素通し
+    （認証自体は require_admin / require_project が別途担う）。
+    """
+    source = request.headers.get("origin") or request.headers.get("referer")
+    if source is None:
+        return
+    host = request.headers.get("host", "")
+    if urlparse(source).netloc != host:
+        raise forbidden("クロスオリジンからの状態変更は拒否されます")
 
 
 def require_project(request: Request, project: str) -> sqlite3.Row:

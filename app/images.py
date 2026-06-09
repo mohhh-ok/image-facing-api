@@ -81,7 +81,15 @@ def _is_blocked_ip(host: str) -> bool:
 
 
 def fetch_image_url(url: str, max_bytes: int, timeout: float = 5.0) -> bytes:
-    """https のみ・内部 IP ブロック・サイズ制限付きで画像を取得する。"""
+    """https のみ・内部 IP ブロック・サイズ制限付きで画像を取得する。
+
+    DoS 対策として本文はストリーミングし、累積バイトが上限を超えた時点で打ち切る
+    （`resp.content` で一括読み込みしない）。Content-Length があれば事前に拒否する。
+
+    注意（docs/security.md）: ホスト検証は「名前解決 → 接続」の間に再解決が入るため、
+    DNS リバインディングを完全には防げない。`ALLOW_IMAGE_URL` は既定 false。本番で有効化する
+    場合は egress プロキシ / 許可リストの併用を前提とする。
+    """
     import httpx
 
     parsed = urlparse(url)
@@ -90,14 +98,21 @@ def fetch_image_url(url: str, max_bytes: int, timeout: float = 5.0) -> bytes:
     if not parsed.hostname or _is_blocked_ip(parsed.hostname):
         raise bad_request("image_url のホストは許可されていません")
 
+    chunks: list[bytes] = []
     try:
         with httpx.Client(timeout=timeout, follow_redirects=False) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
+            with client.stream("GET", url) as resp:
+                resp.raise_for_status()
+                cl = resp.headers.get("content-length")
+                if cl is not None and cl.isdigit() and int(cl) > max_bytes:
+                    raise payload_too_large("画像が上限を超えています")
+                total = 0
+                for chunk in resp.iter_bytes():
+                    total += len(chunk)
+                    if total > max_bytes:
+                        raise payload_too_large("画像が上限を超えています")
+                    chunks.append(chunk)
     except httpx.HTTPError as exc:
         raise bad_request("image_url を取得できません") from exc
 
-    data = resp.content
-    if len(data) > max_bytes:
-        raise payload_too_large("画像が上限を超えています")
-    return data
+    return b"".join(chunks)

@@ -10,6 +10,9 @@
 - API キーは平文を DB に置かない（発行時のみ平文返却・以後は hash）。
 - 認証は**最初から付ける**前提で実装する。「あとで付ける」と公開時に漏れる。
   ローカル開発でだけ `AUTH_DISABLED=1` で外せるようにしてよい（本番では絶対に立てない）。
+- **CSRF**: admin は Basic 認証でブラウザが資格情報を自動送信するため、状態変更の POST
+  （`/admin/correct`・`POST /v1/projects`）は **Origin/Referer の同一オリジン検査**で保護する
+  （`app/auth.py:verify_same_origin`）。Origin/Referer の無いサービス間呼び出し（curl 等）は素通し。
 
 ## untrusted input の扱い
 
@@ -23,6 +26,10 @@
   - `image_url` を受ける場合は **SSRF に注意**: 内部 IP / localhost / メタデータエンドポイント（169.254.169.254）を
     ブロックし、スキームは https のみ、リダイレクト追跡を制限、タイムアウトを付ける。
     不安なら初版は `image_url` を無効化し base64/multipart のみにする。
+  - 実装補足: 取得は**ストリーミングして累積バイトが `MAX_IMAGE_BYTES` 超で打ち切り**、Content-Length が
+    あれば事前に拒否する（DoS 対策）。ただしホスト検証は「名前解決 → 接続」の間の再解決により
+    **DNS リバインディングを完全には防げない**。本番で `ALLOW_IMAGE_URL=true` にする場合は
+    egress プロキシ / 許可リストの併用を前提とする（既定は false）。
 - **メタデータ（external_id, description, project 名）**:
   - 長さ上限・文字種制限（project 名は英数ハイフンのみ）。
   - SQL は必ずパラメータバインド（文字列連結禁止）。

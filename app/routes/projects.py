@@ -6,14 +6,18 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, Request
 
-from ..auth import generate_api_key, hash_api_key, require_admin
+from ..auth import generate_api_key, hash_api_key, require_admin, verify_same_origin
 from ..errors import bad_request
 from ..models import ProjectCreate, ProjectCreated, ProjectSummary
 
 router = APIRouter(prefix="/v1/projects")
 
 
-@router.post("", response_model=ProjectCreated, dependencies=[Depends(require_admin)])
+@router.post(
+    "",
+    response_model=ProjectCreated,
+    dependencies=[Depends(require_admin), Depends(verify_same_origin)],
+)
 def create_project(body: ProjectCreate, request: Request) -> ProjectCreated:
     db = request.app.state.db
     if db.get_project(body.name) is not None:
