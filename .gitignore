@@ -1,0 +1,24 @@
+# データ・秘密情報
+data/
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# モデル（大きい。Git LFS かビルド時取得で管理する場合はコミットしない）
+# 同梱方針が決まったら調整すること（docs/deploy.md 参照）
+models/*.onnx
+
+# OS / エディタ
+.DS_Store
+.idea/
+.vscode/
