@@ -51,6 +51,18 @@ class ProjectIndex:
             return
         self.facings[idx] = facing
 
+    def remove(self, sample_id: int) -> bool:
+        try:
+            idx = self.sample_ids.index(sample_id)
+        except ValueError:
+            return False
+        self.vectors = np.delete(self.vectors, idx, axis=0)
+        del self.sample_ids[idx]
+        del self.facings[idx]
+        del self.is_flip[idx]
+        del self.origin_ids[idx]
+        return True
+
 
 class Store:
     """全 project のインデックスを束ねる。スレッドセーフ。"""
@@ -103,6 +115,10 @@ class Store:
     def update_facing(self, project: str, sample_id: int, facing: str) -> None:
         with self._lock:
             self.get(project).update_facing(sample_id, facing)
+
+    def remove(self, project: str, sample_id: int) -> None:
+        with self._lock:
+            self.get(project).remove(sample_id)
 
     def project_count(self) -> int:
         with self._lock:

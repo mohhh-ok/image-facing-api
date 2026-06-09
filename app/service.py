@@ -186,3 +186,26 @@ class FacingService:
         if child is not None:
             self.db.update_sample_facing(int(child["id"]), opposite(facing), "human")
             self.store.update_facing(project, int(child["id"]), opposite(facing))
+
+    def delete_label(self, project: str, sample_id: int) -> int:
+        """原本ラベルとその flip 拡張行を DB / index の両方から削除する。
+
+        対象は原本（is_flip_aug=0）のみ指定可。削除した行数（原本+flip子）を返す。
+        画像ファイルは sha 単位で他サンプルと共有しうるため、ここでは消さない。
+        """
+        row = self.db.get_sample(sample_id)
+        if row is None or row["project"] != project or int(row["is_flip_aug"]) == 1:
+            raise bad_request("削除対象のサンプルが見つかりません（原本ラベルのみ指定可）")
+
+        removed = 0
+        child = self.db.get_flip_child(sample_id)
+        if child is not None:
+            child_id = int(child["id"])
+            self.db.delete_sample(child_id)
+            self.store.remove(project, child_id)
+            removed += 1
+
+        self.db.delete_sample(sample_id)
+        self.store.remove(project, sample_id)
+        removed += 1
+        return removed

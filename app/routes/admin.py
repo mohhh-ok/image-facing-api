@@ -65,6 +65,18 @@ def admin_correct(
     return RedirectResponse(url=url, status_code=303)
 
 
+@router.post("/delete", dependencies=[Depends(verify_same_origin)])
+def admin_delete(
+    request: Request,
+    project: str = Form(...),
+    sample_id: int = Form(...),
+):
+    """原本ラベルとその flip 拡張行を削除する（admin 認証）。"""
+    svc = get_service(request)
+    removed = svc.delete_label(project, sample_id)
+    return {"project": project, "sample_id": sample_id, "removed_rows": removed}
+
+
 @router.get("/image/{sha}")
 def admin_image(request: Request, sha: str):
     if not _SHA_RE.match(sha):

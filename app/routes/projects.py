@@ -32,6 +32,22 @@ def create_project(body: ProjectCreate, request: Request) -> ProjectCreated:
     return ProjectCreated(project=row["name"], api_key=api_key, created_at=row["created_at"])
 
 
+@router.post(
+    "/{name}/rotate_key",
+    response_model=ProjectCreated,
+    dependencies=[Depends(require_admin), Depends(verify_same_origin)],
+)
+def rotate_key(name: str, request: Request) -> ProjectCreated:
+    """既存 project の API キーを再発行する（旧キーは即無効・admin 認証）。"""
+    db = request.app.state.db
+    row = db.get_project(name)
+    if row is None:
+        raise bad_request(f"project '{name}' は存在しません")
+    api_key = generate_api_key()
+    db.update_project_api_key(name, hash_api_key(api_key))
+    return ProjectCreated(project=name, api_key=api_key, created_at=row["created_at"])
+
+
 @router.get("", response_model=list[ProjectSummary], dependencies=[Depends(require_admin)])
 def list_projects(request: Request) -> list[ProjectSummary]:
     db = request.app.state.db

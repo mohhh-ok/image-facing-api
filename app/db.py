@@ -217,6 +217,10 @@ class Database:
             (origin_sample_id,),
         )
 
+    def delete_sample(self, sample_id: int) -> None:
+        # embeddings は ON DELETE CASCADE（PRAGMA foreign_keys=ON）で同時に消える。
+        self._execute("DELETE FROM samples WHERE id = ?", (sample_id,))
+
     def list_samples(
         self,
         project: str,

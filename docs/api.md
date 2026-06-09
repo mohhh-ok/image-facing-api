@@ -96,6 +96,33 @@ project を新規作成し API キーを発行する（**admin 認証必須**）
 
 project 一覧（**admin 認証必須**）。件数・最終更新等を返す。
 
+## POST /v1/projects/{name}/rotate_key
+
+既存 project の API キーを**再発行**する（**admin 認証必須** + 同一オリジン）。
+旧キーは即座に無効化されるので、利用中のクライアントは新キーへ差し替えるまで 403 になる。
+
+レスポンス: `{ "project": "...", "api_key": "fk_live_新", "created_at": "..." }`（平文はこの応答のみ）。
+
+```bash
+curl -X POST https://<host>/v1/projects/<name>/rotate_key -u "$ADMIN_USER:$ADMIN_PASS"
+```
+
+---
+
+## POST /admin/delete
+
+ラベル（**原本のみ**）とその flip 拡張行を削除する（**admin 認証必須** + 同一オリジン）。
+DB から消すと同時にインメモリ k-NN index からも追い出す。埋め込みは cascade で消える。
+画像ファイルは sha 単位で共有しうるため残す。
+
+リクエスト（form）: `project=<name>&sample_id=<原本のid>`
+レスポンス: `{ "project": "...", "sample_id": 123, "removed_rows": 2 }`
+
+```bash
+curl -X POST https://<host>/admin/delete -u "$ADMIN_USER:$ADMIN_PASS" \
+  -d project=<name> -d sample_id=<id>
+```
+
 ---
 
 ## GET /admin
