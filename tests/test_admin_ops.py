@@ -37,9 +37,8 @@ def test_admin_delete_removes_original_and_flip(client, admin_auth):
     resp = client.post(
         "/admin/delete", data={"project": "proj", "sample_id": str(sid)}, auth=admin_auth
     )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["removed_rows"] == 2
-    assert _counts(client, admin_auth, "proj") == (0, 0)
+    assert resp.status_code == 200, resp.text  # 303 で /admin に追従
+    assert _counts(client, admin_auth, "proj") == (0, 0)  # 原本+flip とも消えた
 
 
 def test_admin_delete_requires_auth(client, admin_auth):

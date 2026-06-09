@@ -20,6 +20,12 @@
     .toggle button.on { background: #4a90d9; color: #fff; border-color: #4a90d9; }
     .meta { font-size: .75rem; opacity: .7; margin-top: .25rem; }
     form.inline { display: contents; }
+    .proj { display: inline-flex; align-items: center; gap: .2rem; margin-right: .75rem; }
+    .inline-key { display: inline; margin: 0; }
+    .inline-key button { border: none; background: none; cursor: pointer; font-size: .9rem; padding: 0; }
+    .card form.del-form { margin: .3rem 0 0; }
+    button.del { font-size: .72rem; padding: .2rem .55rem; color: #c0392b; border: 1px solid #c0392b55; border-radius: 5px; background: transparent; cursor: pointer; }
+    button.del:hover { background: #c0392b; color: #fff; }
   </style>
 </head>
 <body>
@@ -28,8 +34,14 @@
   <div class="projects">
     project:
     {% for p in projects %}
-      <a href="/admin?project={{ p.name }}{% if show_flip %}&show_flip=true{% endif %}"
-         class="{% if p.name == selected %}active{% endif %}">{{ p.name }}</a>
+      <span class="proj">
+        <a href="/admin?project={{ p.name }}{% if show_flip %}&show_flip=true{% endif %}"
+           class="{% if p.name == selected %}active{% endif %}">{{ p.name }}</a>
+        <form class="inline-key" method="post" action="/v1/projects/{{ p.name }}/rotate_key"
+              onsubmit="return confirm('{{ p.name }} の API キーを再発行します。旧キーは即無効になり、利用中のクライアントは差し替えるまで停止します。続けますか？');">
+          <button type="submit" title="API キー再発行（新キーは応答に1度だけ表示）">🔑</button>
+        </form>
+      </span>
     {% else %}
       <em>（project がまだありません）</em>
     {% endfor %}
@@ -59,6 +71,15 @@
           <div class="meta">
             #{{ s.id }} · {{ s.source }}{% if s.is_flip_aug %} · flip{% endif %}
           </div>
+          {% if not s.is_flip_aug %}
+            <form class="del-form" method="post" action="/admin/delete"
+                  onsubmit="return confirm('#{{ s.id }} とその flip 拡張を削除します。元に戻せません。よろしいですか？');">
+              <input type="hidden" name="project" value="{{ selected }}">
+              <input type="hidden" name="sample_id" value="{{ s.id }}">
+              <input type="hidden" name="show_flip" value="{{ 'true' if show_flip else 'false' }}">
+              <button type="submit" class="del">削除</button>
+            </form>
+          {% endif %}
         </div>
       {% else %}
         <p>サンプルがありません。</p>

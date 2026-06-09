@@ -70,11 +70,15 @@ def admin_delete(
     request: Request,
     project: str = Form(...),
     sample_id: int = Form(...),
+    show_flip: bool = Form(False),
 ):
-    """原本ラベルとその flip 拡張行を削除する（admin 認証）。"""
+    """原本ラベルとその flip 拡張行を削除し、admin 画面に戻る（admin 認証）。"""
     svc = get_service(request)
-    removed = svc.delete_label(project, sample_id)
-    return {"project": project, "sample_id": sample_id, "removed_rows": removed}
+    svc.delete_label(project, sample_id)
+    url = f"/admin?project={project}"
+    if show_flip:
+        url += "&show_flip=true"
+    return RedirectResponse(url=url, status_code=303)
 
 
 @router.get("/image/{sha}")

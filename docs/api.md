@@ -115,11 +115,13 @@ curl -X POST https://<host>/v1/projects/<name>/rotate_key -u "$ADMIN_USER:$ADMIN
 DB から消すと同時にインメモリ k-NN index からも追い出す。埋め込みは cascade で消える。
 画像ファイルは sha 単位で共有しうるため残す。
 
-リクエスト（form）: `project=<name>&sample_id=<原本のid>`
-レスポンス: `{ "project": "...", "sample_id": 123, "removed_rows": 2 }`
+admin UI の各サンプルカードの「削除」ボタンから実行できる。
+
+リクエスト（form）: `project=<name>&sample_id=<原本のid>`（任意で `show_flip`）
+レスポンス: **303** で `/admin?project=<name>` に戻る（curl では `-i` で確認・`-L` で追従）。
 
 ```bash
-curl -X POST https://<host>/admin/delete -u "$ADMIN_USER:$ADMIN_PASS" \
+curl -i -X POST https://<host>/admin/delete -u "$ADMIN_USER:$ADMIN_PASS" \
   -d project=<name> -d sample_id=<id>
 ```
 
