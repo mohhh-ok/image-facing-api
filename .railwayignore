@@ -1,5 +1,6 @@
 # railway up のアップロード対象から除外（Docker ビルドに不要・重いもの）。
-# models/ は除外しない（dinov2_vits14.onnx をイメージに焼くため送る）。
+# models/ も除外する（onnx は Dockerfile がビルド時に Release から取得するので送らない）。
+models/
 .venv/
 venv/
 data/
