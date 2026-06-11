@@ -1,45 +1,45 @@
-# Public 化チェックリスト
+# Going-public checklist
 
-private → public に切り替えるときに実施する手順。順序厳守。
+Procedure to follow when flipping the repo from private to public. Order matters.
 
-## 1. 事前確認 (済)
+## 1. Pre-checks (done)
 
-- [x] `gitleaks detect` で漏洩なし
-- [x] `.env` が `.gitignore` 済み・git 履歴に無い
-- [x] onnx を本 repo の Release `v1` にアップロード済 (sha256: `b43bd497e2d9f79722371c3177fb2f92917da84df1db9aece9cdce03abfeea1b`)
+- [x] `gitleaks detect` shows no leaks
+- [x] `.env` is in `.gitignore` and absent from git history
+- [x] onnx is uploaded to this repo's `v1` Release (sha256: `b43bd497e2d9f79722371c3177fb2f92917da84df1db9aece9cdce03abfeea1b`)
 
-## 2. ライセンス追加
+## 2. Add the license
 
-- [x] `LICENSE` (MIT) をリポジトリ直下に追加済
-- [x] README に DINOv2 (Apache 2.0) のライセンス継承についての注記を追加済
+- [x] `LICENSE` (MIT) added at the repo root
+- [x] README notes the upstream DINOv2 (Apache 2.0) license
 
-## 3. Public 化
+## 3. Flip to public
 
 ```sh
 gh repo edit mohhh-ok/image-facing-api --visibility public --accept-visibility-change-consequences
 ```
 
-## 4. Dockerfile の URL 差し替え
+## 4. Update the URL in the Dockerfile
 
-`mohhh-ok/ai-facing-api-models` → `mohhh-ok/image-facing-api` に変更。sha256 は同一なのでそのまま。
+Change `mohhh-ok/ai-facing-api-models` to `mohhh-ok/image-facing-api`. The sha256 is unchanged so it stays as-is.
 
 ```diff
 - curl -fsSL https://github.com/mohhh-ok/ai-facing-api-models/releases/download/v1/dinov2_vits14.onnx \
 + curl -fsSL https://github.com/mohhh-ok/image-facing-api/releases/download/v1/dinov2_vits14.onnx \
 ```
 
-CLAUDE.md / `.gitignore` 内のコメントの参照先も合わせて更新。
+Also update the matching references in CLAUDE.md and `.gitignore` comments.
 
-## 5. ビルド確認
+## 5. Verify the build
 
-Railway を再デプロイし、build log で onnx の取得と sha256 検証が通ることを確認。
+Redeploy on Railway and confirm in the build log that the onnx fetch and the sha256 verification succeed.
 
-## 6. 旧 repo の archive
+## 6. Archive the old repo
 
-ビルドが安定したら:
+Once the build is stable:
 
 ```sh
 gh repo edit mohhh-ok/ai-facing-api-models --archived
 ```
 
-README に "Moved to https://github.com/mohhh-ok/image-facing-api" を追記してから archive。
+Add "Moved to https://github.com/mohhh-ok/image-facing-api" to the README before archiving.

@@ -1,70 +1,70 @@
-# API 利用ガイド
+# API Usage Guide
 
-このサービスを**呼ぶ側**の手順書。エンドポイントの厳密な仕様は [api.md](api.md) が正で、
-ここは「実際にどう叩くか」の how-to。
+A how-to for **callers** of this service. The authoritative endpoint spec is [api.md](api.md);
+this document covers how to actually hit it in practice.
 
-## 1 行でいうと
+## In one line
 
-画像を投げると `facing`（`"left"` か `"right"`）を返す。ラベルを足すほど精度が上がる（[model.md](model.md)）。
-LLM は呼ばない・外部に副作用を持たない、画像 → ラベルの純関数的サービス。
-
----
-
-## ベース URL とバージョン
-
-- ローカル: `http://localhost:8000`（`PORT` 既定 8000・[env.md](env.md)）
-- 全 API にバージョンプレフィックス `/v1` が付く（admin / healthz を除く）。
-
-以降の例では `BASE=http://localhost:8000`、`PROJECT=my-project` とする。
+Send an image, get back `facing` (`"left"` or `"right"`). Accuracy improves the more labels you add (see [model.md](model.md)).
+No LLM calls, no external side effects — a pure image-to-label function.
 
 ---
 
-## 認証
+## Base URL and version
 
-| 用途 | 方式 | ヘッダ |
+- Local: `http://localhost:8000` (`PORT` defaults to 8000; see [env.md](env.md))
+- All API endpoints are prefixed with `/v1` (except `admin` and `healthz`).
+
+The examples below assume `BASE=http://localhost:8000` and `PROJECT=my-project`.
+
+---
+
+## Authentication
+
+| Purpose | Method | Header |
 |---|---|---|
-| predict / label（サービス間） | API キー | `X-API-Key: fk_live_xxx` |
-| projects 作成・一覧 / admin UI | Basic 認証 | `Authorization: Basic ...`（`ADMIN_USER` / `ADMIN_PASS`） |
-| healthz | 不要 | — |
+| predict / label (service-to-service) | API key | `X-API-Key: fk_live_xxx` |
+| project create/list, admin UI | Basic auth | `Authorization: Basic ...` (`ADMIN_USER` / `ADMIN_PASS`) |
+| healthz | none | — |
 
-- API キーは **project ごと**。URL の `{project}` とキーが一致しないと `403 forbidden`。
-- ローカル開発では `AUTH_DISABLED=1` で認証を丸ごとバイパスできる（**本番では絶対に立てない**・[security.md](security.md)）。
-- API キーは作成レスポンスで **一度だけ平文を返す**（DB は hash 保存）。控え忘れたら作り直し。
+- API keys are **per project**. If the key does not match the `{project}` in the URL, you get `403 forbidden`.
+- For local development, `AUTH_DISABLED=1` bypasses auth entirely (**never enable this in production**; see [security.md](security.md)).
+- The API key plaintext is **returned exactly once**, in the creation response (the DB stores a hash). If you lose it, rotate the key.
 
 ---
 
-## 画像の渡し方（3 通り・どれか 1 つ）
+## How to send the image (three options, pick one)
 
-すべてのエンドポイント共通。`app/request_input.py` で解釈する。
+Common to all endpoints. Parsed by `app/request_input.py`.
 
-1. **JSON `image_base64`**（無難・推奨）
+1. **JSON `image_base64`** (safe and recommended)
    ```json
    { "image_base64": "iVBORw0KGgo..." }
    ```
-   `data:image/png;base64,...` の data URL プレフィックス付きでも受け付ける。
-2. **multipart/form-data の `file` フィールド** — そのほかの値（`facing` 等）はフォーム項目で送る。
-3. **JSON `image_url`** — `ALLOW_IMAGE_URL=true` のときだけ有効（SSRF 懸念で既定オフ）。
+   The `data:image/png;base64,...` data-URL prefix is also accepted.
+2. **multipart/form-data `file` field** — send other values (`facing`, etc.) as form fields.
+3. **JSON `image_url`** — only enabled when `ALLOW_IMAGE_URL=true` (off by default due to SSRF risk).
 
-上限は `MAX_IMAGE_BYTES`（既定 10MB）。超過は `413 payload_too_large`。
+The size limit is `MAX_IMAGE_BYTES` (default 10MB). Exceeding it returns `413 payload_too_large`.
 
 ---
 
-## エンドポイント別の使い方
+## Per-endpoint usage
 
-### project を作る（admin・最初に一度）
+### Create a project (admin, one-time)
 
 ```bash
 curl -u "$ADMIN_USER:$ADMIN_PASS" \
   -X POST "$BASE/v1/projects" \
   -H 'content-type: application/json' \
-  -d '{"name":"my-project","description":"画像の左右向き判定"}'
+  -d '{"name":"my-project","description":"facing classification"}'
 # => {"project":"my-project","api_key":"fk_live_xxxxxxxx...","created_at":"..."}
 ```
-`api_key` をクライアントの env（`FACING_API_KEY` 等）へ保存する。一覧は `GET /v1/projects`（同じく admin）。
+Save the `api_key` into the client's env (e.g. `FACING_API_KEY`). Listing is `GET /v1/projects` (also admin).
 
-### 判定する（predict）
+### Predict
 
-学習データには**加えない**読み取り操作。好きなタイミングで叩いてよい。
+A read-only operation that **does not** add to the training set. Call it whenever you want.
 
 ```bash
 curl -X POST "$BASE/v1/$PROJECT/predict" \
@@ -72,20 +72,20 @@ curl -X POST "$BASE/v1/$PROJECT/predict" \
   -H 'content-type: application/json' \
   -d "{\"image_base64\":\"$(base64 -i sample.png)\"}"
 ```
-レスポンス:
+Response:
 ```json
 { "facing": "left", "confidence": 0.86, "uncertain": false,
   "neighbors": [ {"sample_id":1421,"facing":"left","similarity":0.94} ],
   "model": "dinov2_vits14", "k": 9 }
 ```
-- `uncertain=true` でも `facing` は必ず返る（票が割れた／近傍が遠い／ラベルが少ない）。
-  クライアントはこれを見て **フォールバック（既存 LLM 判定など）や admin 行き**に回す。
-- `neighbors` はデバッグ用。不要なら `?include_neighbors=false`（または JSON に同フィールド）で省ける。
-- predict は監査ログに **画像ハッシュ＋判定結果のみ**残す（画像本体は保存しない）。
+- `facing` is always returned, even when `uncertain=true` (split vote / distant neighbors / few labels).
+  Clients should use `uncertain` to route to a **fallback (e.g. an existing LLM judgement) or to admin**.
+- `neighbors` is for debugging. If you don't need it, suppress with `?include_neighbors=false` (or the same field in JSON).
+- Predict leaves only the **image hash and the result** in the audit log (the image itself is not stored).
 
-### 正解を登録する（label）
+### Register a label
 
-学習データに加わり、以降の predict に**即時反映**される。`facing` が必須。
+Adds to the training set and **takes effect immediately** for subsequent predicts. `facing` is required.
 
 ```bash
 curl -X POST "$BASE/v1/$PROJECT/label" \
@@ -94,13 +94,13 @@ curl -X POST "$BASE/v1/$PROJECT/label" \
   -d "{\"image_base64\":\"$(base64 -i sample.png)\",\"facing\":\"right\",\"source\":\"human\"}"
 # => {"sample_id":1422,"facing":"right","deduped":false,"flip_added":true,"project_size":318}
 ```
-- `source` 既定 `"human"`（`"human" | "import" | "model"`）。`human` が最優先ラベル。
-- 同一画像（**sha256 一致**）が既にあれば facing を上書きし `deduped:true`（→ 後述のフロー）。
-- `flip_added`: 水平反転版を逆ラベルで自動追加したか（既定で追加。母数が自動で左右均衡する）。
-- `external_id` は任意で渡せるが **DB に保存されるだけで突合には使われない**（突合は画像の sha256）。
-- **label に流すのは正解だけ**。自動・実験的な判定結果を無闇に流すとラベル空間が汚れる。
+- `source` defaults to `"human"` (`"human" | "import" | "model"`). `human` is the highest-priority label.
+- If the same image (**sha256 match**) already exists, the facing is overwritten and `deduped:true` is returned (see flow below).
+- `flip_added`: whether a horizontally flipped variant was auto-added with the inverse label (added by default; this balances left/right automatically).
+- `external_id` is optional, but it is **only stored in the DB and is not used for matching** (matching is by image sha256).
+- **Only send confirmed labels through `label`**. Pumping automated or experimental predictions in pollutes the label space.
 
-### ヘルスチェック（healthz）
+### Health check
 
 ```bash
 curl "$BASE/healthz"   # => {"status":"ok","model_loaded":true,"projects":3}
@@ -108,36 +108,36 @@ curl "$BASE/healthz"   # => {"status":"ok","model_loaded":true,"projects":3}
 
 ---
 
-## 「判定 → 使用者 UI で確認・修正 → 修正反映」のフロー
+## Flow: predict → user confirms/corrects in UI → correction flows back
 
-predict はステートレスで、サーバは predict と label を繋ぐ ID（predict_id 等）を**発行しない**。
-突合は **画像の sha256**で行うため、繋ぎは次の形になる。
+Predict is stateless; the server **does not issue** an ID (such as `predict_id`) tying predict to label.
+Matching is done by **the image's sha256**, so the wiring looks like this:
 
 ```
-1. クライアントが判定対象の画像を手元に保持する
-2. POST /predict（画像）       → facing / uncertain を受け取り UI に出す
-3. 使用者が UI で確認・修正する
-4. 修正後の facing を POST /label（同じ画像 + facing, source="human"）で送る
-   → 同じ画像なので sha256 一致で既存ラベルを上書き（deduped:true）。新規なら追加。
-   → 即 k-NN に反映される
+1. Client keeps the image to be classified in hand
+2. POST /predict (image)        → receive facing / uncertain, show in UI
+3. User confirms or corrects in the UI
+4. POST /label with the corrected facing (same image + facing, source="human")
+   → sha256 matches, so the existing label is overwritten (deduped:true). If new, it's added.
+   → Immediately reflected in k-NN
 ```
 
-ポイント:
-- **修正時は同じ画像をもう一度送る**（predict の応答に ID が無いため、画像が突合キー）。
-  クライアントは predict した画像を破棄せず保持しておくこと。
-- 修正は admin UI（`/admin`）からでも同じ label 経路を通る。クライアント UI から直すなら
-  その操作を `/label`（`source="human"`）へ中継すればよい。
-- 「最初は LLM 等で判定 → 人が直したぶんだけ label に流して種を育てる」運用が基本。
+Key points:
+- **Send the same image again when correcting** (predict has no ID in its response, so the image is the matching key).
+  The client must keep the image it predicted on, not discard it.
+- Corrections from the admin UI (`/admin`) go through the same `label` path. To correct from your client UI,
+  just relay that action to `/label` (`source="human"`).
+- The usual operating pattern is: "first classify with an LLM or similar, then feed the human-corrected ones into `label` to grow the seed."
 
 ---
 
-## クライアント実装メモ
+## Client implementation notes
 
-- **タイムアウトとフォールバックを必ず用意**する。外部依存なので、落ちても呼び出し側のバッチを止めない。
-- env は `FACING_API_URL` / `FACING_API_KEY` で持ち、未設定ならフォールバックに倒す（ローカルのオフライン自律性）。
-- 画像バイナリは加工しない。**向きはデータ（facing）で持ち、表示時に CSS で反転**する。
+- **Always set timeouts and a fallback.** This is an external dependency; if it goes down, the caller's batch should not stop.
+- Hold the URL and key in env (`FACING_API_URL` / `FACING_API_KEY`); if unset, fall back (local offline autonomy).
+- Do not transform the image bytes. **Carry the facing as data and flip in CSS at render time.**
 
-### Python（requests）
+### Python (requests)
 
 ```python
 import base64, requests
@@ -154,7 +154,7 @@ def predict(img_bytes: bytes) -> dict:
     return r.json()   # {"facing": ..., "uncertain": ..., ...}
 ```
 
-### TypeScript（fetch）
+### TypeScript (fetch)
 
 ```ts
 async function predict(imgBase64: string): Promise<{ facing: "left" | "right"; uncertain: boolean }> {
@@ -171,15 +171,15 @@ async function predict(imgBase64: string): Promise<{ facing: "left" | "right"; u
 
 ---
 
-## エラー
+## Errors
 
-形式は `{"error": {"code": "...", "message": "..."}}`。主なもの（全量は [api.md](api.md)）:
+The format is `{"error": {"code": "...", "message": "..."}}`. Common ones (full list in [api.md](api.md)):
 
-| HTTP | code | 対処 |
+| HTTP | code | what to do |
 |---|---|---|
-| 400 | `bad_image` / `bad_request` | 画像がデコード不可・必須欠落（facing 等）・facing が left/right 以外 |
-| 401 | `unauthorized` | `X-API-Key` / Basic が無い |
-| 403 | `forbidden` | キーは有効だが project 不一致 |
-| 404 | `no_such_project` | project 未作成 |
-| 413 | `payload_too_large` | 画像が `MAX_IMAGE_BYTES` 超過 |
-| 500 | `internal` | 想定外。リトライ＋フォールバックで受ける |
+| 400 | `bad_image` / `bad_request` | image cannot be decoded / required field missing (e.g. `facing`) / `facing` is not `left` or `right` |
+| 401 | `unauthorized` | no `X-API-Key` / no Basic auth |
+| 403 | `forbidden` | key is valid but does not match the project |
+| 404 | `no_such_project` | project has not been created |
+| 413 | `payload_too_large` | image exceeds `MAX_IMAGE_BYTES` |
+| 500 | `internal` | unexpected. Handle with retry + fallback |

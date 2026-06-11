@@ -1,55 +1,55 @@
-# 実装ロードマップ
+# Implementation roadmap
 
-設計ドキュメントに従って、下から積む。各フェーズは「動いて確認できる」単位で切る。
+Build bottom-up, following the design docs. Each phase is sized so the result is "running and verifiable".
 
-## フェーズ 0: 足場
+## Phase 0: scaffolding
 
-- [ ] `pyproject.toml`（fastapi, uvicorn, onnxruntime, pillow, numpy, jinja2。torch は dev/scripts のみ）
-- [ ] `.gitignore`（`data/`, `.env`, `__pycache__`, 大きいモデルは LFS か別管理）
-- [ ] `app/config.py`（[env.md](env.md) の変数を読む）
-- [ ] `app/db.py`（[database.md](database.md) の schema を `CREATE TABLE IF NOT EXISTS`）
+- [ ] `pyproject.toml` (fastapi, uvicorn, onnxruntime, pillow, numpy, jinja2. torch only for dev/scripts)
+- [ ] `.gitignore` (`data/`, `.env`, `__pycache__`; large models via LFS or managed separately)
+- [ ] `app/config.py` (read the variables in [env.md](env.md))
+- [ ] `app/db.py` (create the schema in [database.md](database.md) with `CREATE TABLE IF NOT EXISTS`)
 - [ ] `GET /healthz`
 
-## フェーズ 1: 埋め込み
+## Phase 1: embeddings
 
-- [ ] `scripts/export_dinov2_onnx.py`（DINOv2 ViT-S/14 → `models/dinov2_vits14.onnx`）
-- [ ] `app/embed.py`（前処理を [model.md](model.md) どおり固定 → 384 次元 L2 正規化ベクトル）
-- [ ] 単体確認: 同じ画像と、その水平反転が**別ベクトル**になること（向き情報を保持している証拠）
+- [ ] `scripts/export_dinov2_onnx.py` (DINOv2 ViT-S/14 -> `models/dinov2_vits14.onnx`)
+- [ ] `app/embed.py` (preprocessing fixed exactly as in [model.md](model.md) -> 384-dim L2-normalized vector)
+- [ ] Sanity check: the same image and its horizontal flip must produce **different vectors** (proof that facing information is preserved)
 
-## フェーズ 2: 学習集合と k-NN
+## Phase 2: training set and k-NN
 
-- [ ] `app/store.py`（起動時に embeddings を project ごと numpy 行列へ。label で append）
-- [ ] `app/classifier.py`（cosine 近傍・多数決・confidence・[model.md](model.md) の式）
-- [ ] flip 拡張（label 時に逆ラベルで追加・`origin_sample_id` で紐付け）
+- [ ] `app/store.py` (at startup, load embeddings into a per-project numpy matrix; append on label)
+- [ ] `app/classifier.py` (cosine neighbors, majority vote, confidence; formulas in [model.md](model.md))
+- [ ] flip augmentation (on label, also insert the flipped image with the opposite label, linked by `origin_sample_id`)
 
-## フェーズ 3: API
+## Phase 3: API
 
-- [ ] `app/auth.py`（API キー hash 照合・admin Basic・`AUTH_DISABLED` はローカルのみ）
-- [ ] `POST /v1/projects`（作成・キー発行）/ `GET /v1/projects`
-- [ ] `POST /v1/{project}/label`（dedupe・画像保存・埋め込み・flip 拡張・即反映）
-- [ ] `POST /v1/{project}/predict`（判定・confidence・uncertain）
-- [ ] エラーコード（[api.md](api.md)）・画像サイズ上限（[security.md](security.md)）
+- [ ] `app/auth.py` (API key hash verification, admin Basic, `AUTH_DISABLED` local-only)
+- [ ] `POST /v1/projects` (create / issue key) / `GET /v1/projects`
+- [ ] `POST /v1/{project}/label` (dedupe, image persistence, embedding, flip augmentation, instant reflection)
+- [ ] `POST /v1/{project}/predict` (decision, confidence, uncertain)
+- [ ] Error codes ([api.md](api.md)) and image size cap ([security.md](security.md))
 
-## フェーズ 4: admin UI
+## Phase 4: admin UI
 
-- [ ] `GET /admin`（project 選択・サンプル一覧・プレビュー反転・`[←left][right→]` トグル）
-- [ ] uncertain / 未ラベル / 最近追加のフィルタ、flip 拡張行を隠す
-- [ ] 元サンプル修正時に flip 拡張行を自動追従
+- [ ] `GET /admin` (project picker, sample list, preview flip, `[<-left][right->]` toggle)
+- [ ] Filters for uncertain / unlabeled / recently added; hide flip-augmentation rows
+- [ ] When the original sample is corrected, its flip-augmentation row follows automatically
 
-## フェーズ 5: デプロイ
+## Phase 5: deploy
 
-- [ ] `Dockerfile`（モデル同梱・torch 無し）
-- [ ] `railway.json`（`/healthz`・`/data` ボリューム）
-- [ ] 本番に project 作成、API キー発行
+- [ ] `Dockerfile` (model bundled, no torch)
+- [ ] `railway.json` (`/healthz`, `/data` volume)
+- [ ] Create the production project and issue its API key
 
-## フェーズ 6: クライアント連携
+## Phase 6: client integration
 
-- [ ] `scripts/import_labels.py`（既存ラベル/画像から種ラベルを一括投入する例）
+- [ ] `scripts/import_labels.py` (example of bulk-seeding labels from existing labels/images)
 
-## 検証の観点
+## Verification angles
 
-- 同一画像→反転で facing が反転すること（対称性）。
-- ラベルを足すと uncertain が減ること（学習が効いている）。
-- admin 修正が次の predict に即反映されること（再起動不要）。
-- API キー / project スコープの分離（他 project のラベルに触れない）。
-- 画像不正・サイズ超過・認証なしが正しく弾かれること。
+- The same image vs. its flip yields opposite facing (symmetry).
+- Adding labels reduces the uncertain rate (learning is effective).
+- admin corrections are reflected in the very next predict (no restart needed).
+- API key / project scope isolation (a project cannot touch another project's labels).
+- Malformed images, oversized images, and unauthenticated requests are correctly rejected.

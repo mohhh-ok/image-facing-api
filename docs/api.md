@@ -1,29 +1,29 @@
-# HTTP API 仕様
+# HTTP API Specification
 
-ベース URL は環境依存（ローカル `http://localhost:8000`、本番は Railway の URL）。
-バージョンプレフィックスは `/v1`。認証は [security.md](security.md) と [multi-tenant.md](multi-tenant.md) を参照。
+The base URL is environment-dependent (local `http://localhost:8000`, production is the Railway URL).
+The version prefix is `/v1`. For authentication see [security.md](security.md) and [multi-tenant.md](multi-tenant.md).
 
-全エンドポイント共通:
-- 画像の渡し方は **3 通り対応**（どれか1つ）: `multipart/form-data` のファイル、JSON の `image_base64`、JSON の `image_url`。
-- **画像フォーマットはサーバが自動判別する**。Pillow がマジックバイトから形式（JPEG / PNG / WebP / GIF など）を判定してデコードするので、
-  クライアントは**送る前に PNG 等へ変換する必要はない**。生成・取得したバイト列をそのまま送ればよい
-  （非対応形式・壊れた画像は `bad_image` で弾く → [security.md](security.md)）。
-- 認証: サービス間呼び出しは `X-API-Key` ヘッダ（project に紐づくキー）。admin UI は Basic 認証。
-- エラーは `{"error": {"code": "...", "message": "..."}}` 形式・適切な HTTP ステータス。
+Common to all endpoints:
+- Images can be sent in **three ways** (pick one): a `multipart/form-data` file, JSON `image_base64`, or JSON `image_url`.
+- **The server auto-detects the image format.** Pillow identifies the format (JPEG / PNG / WebP / GIF, etc.) from the magic bytes and decodes it, so the client
+  **does not need to convert to PNG or anything else before sending**. Just send the raw bytes you generated or fetched
+  (unsupported formats and corrupt images are rejected with `bad_image` — see [security.md](security.md)).
+- Auth: service-to-service calls use the `X-API-Key` header (key bound to a project). The admin UI uses Basic auth.
+- Errors are returned as `{"error": {"code": "...", "message": "..."}}` with appropriate HTTP status codes.
 
 ---
 
 ## POST /v1/{project}/predict
 
-画像の向きを判定する。**学習データには加えない**（ラベルではない）。
+Predict the facing of an image. **Not added to the training set** (this is not a label).
 
-リクエスト（JSON 例）:
+Request (JSON example):
 ```json
 { "image_base64": "iVBORw0KGgo..." }
 ```
-または multipart の `file` フィールド、または `{"image_url": "https://..."}`。
+Or a multipart `file` field, or `{"image_url": "https://..."}`.
 
-レスポンス:
+Response:
 ```json
 {
   "facing": "left",
@@ -38,70 +38,70 @@
 }
 ```
 
-- `facing`: `"left" | "right"`。
-- `confidence`: 0..1。近傍の票割合と距離から算出（[model.md](model.md)）。
-- `uncertain`: しきい値未満（票が割れた / 近傍が遠い / ラベルがまだ少ない）の場合 true。
-  クライアントはこれを見て **フォールバック（例: LLM 判定）や admin 行き**に回せる。
-- `neighbors`: デバッグ・admin 表示用（`include_neighbors=false` で省略可）。
+- `facing`: `"left" | "right"`.
+- `confidence`: 0..1. Computed from neighbor vote share and distance (see [model.md](model.md)).
+- `uncertain`: true when below threshold (split vote / distant neighbors / too few labels yet).
+  Clients can use this to route to a **fallback (e.g. LLM judgement) or to admin**.
+- `neighbors`: for debugging and admin display (can be omitted with `include_neighbors=false`).
 
-`uncertain=true` でも `facing` は必ず返す（クライアントが二択を必要とするため）。
+`facing` is always returned even when `uncertain=true` (clients need a binary answer).
 
 ---
 
 ## POST /v1/{project}/label
 
-正解ラベルを登録する。学習データに加わり、以降の predict に**即時反映**される。
+Register a ground-truth label. It is added to the training set and **takes effect immediately** for subsequent predicts.
 
-リクエスト（JSON 例）:
+Request (JSON example):
 ```json
 {
   "image_base64": "iVBORw0KGgo...",
   "facing": "right",
-  "external_id": "yokai-51",     // 任意。クライアント側の識別子（DB に保存するだけ。突合には使わない）
-  "source": "human"               // 任意。"human" | "import" | "model" など。既定 "human"
+  "external_id": "yokai-51",     // optional. Client-side identifier (stored in DB only; not used for matching)
+  "source": "human"               // optional. "human" | "import" | "model", etc. Default "human"
 }
 ```
 
-レスポンス:
+Response:
 ```json
 { "sample_id": 1422, "facing": "right", "deduped": false, "flip_added": true, "project_size": 318 }
 ```
 
-- 同一画像（sha256 一致）が既にあれば **facing を更新**（`deduped: true`）。
-- `flip_added`: 水平反転版を逆ラベルで追加したか（既定で追加。[model.md](model.md)）。
-- `project_size`: 反転拡張込みの現在のラベル件数。
-- `source="human"` は admin/人手の最優先ラベル。`model` 由来は信頼度を下げて扱ってよい。
+- If the same image (sha256 match) already exists, **its facing is updated** (`deduped: true`).
+- `flip_added`: whether a horizontally flipped variant was added with the inverse label (added by default; see [model.md](model.md)).
+- `project_size`: current label count, including flip augmentation.
+- `source="human"` is the highest-priority label from admin/manual input. `model`-sourced labels may be treated with lower trust.
 
 ---
 
-## POST /v1/{project}/predict_and_maybe_label （任意・将来）
+## POST /v1/{project}/predict_and_maybe_label (optional, future)
 
-predict した結果 confidence が高ければ自動でラベル化する省力フロー。初版は実装しなくてよい。
+A convenience flow that auto-labels when the predict confidence is high. Not required in v1.
 
 ---
 
 ## POST /v1/projects
 
-project を新規作成し API キーを発行する（**admin 認証必須**）。
+Create a new project and issue an API key (**admin auth required**).
 
-リクエスト: `{ "name": "my-project", "description": "画像の左右向き判定" }`
+Request: `{ "name": "my-project", "description": "facing classification" }`
 
-レスポンス:
+Response:
 ```json
 { "project": "my-project", "api_key": "fk_live_xxx", "created_at": "..." }
 ```
-`api_key` は**この応答でしか平文を返さない**（DB はハッシュ保存）。
+The `api_key` plaintext **is only returned in this response** (the DB stores a hash).
 
 ## GET /v1/projects
 
-project 一覧（**admin 認証必須**）。件数・最終更新等を返す。
+List projects (**admin auth required**). Returns counts, last-updated, etc.
 
 ## POST /v1/projects/{name}/rotate_key
 
-既存 project の API キーを**再発行**する（**admin 認証必須** + 同一オリジン）。
-旧キーは即座に無効化されるので、利用中のクライアントは新キーへ差し替えるまで 403 になる。
+**Reissue** the API key for an existing project (**admin auth required** + same-origin).
+The old key is invalidated immediately, so any client still using it will get 403 until it switches to the new key.
 
-レスポンス: `{ "project": "...", "api_key": "fk_live_新", "created_at": "..." }`（平文はこの応答のみ）。
+Response: `{ "project": "...", "api_key": "fk_live_new", "created_at": "..." }` (plaintext only in this response).
 
 ```bash
 curl -X POST https://<host>/v1/projects/<name>/rotate_key -u "$ADMIN_USER:$ADMIN_PASS"
@@ -111,14 +111,14 @@ curl -X POST https://<host>/v1/projects/<name>/rotate_key -u "$ADMIN_USER:$ADMIN
 
 ## POST /admin/delete
 
-ラベル（**原本のみ**）とその flip 拡張行を削除する（**admin 認証必須** + 同一オリジン）。
-DB から消すと同時にインメモリ k-NN index からも追い出す。埋め込みは cascade で消える。
-画像ファイルは sha 単位で共有しうるため残す。
+Delete a label (**original only**) and its flip-augmented row (**admin auth required** + same-origin).
+The row is removed from the DB and evicted from the in-memory k-NN index at the same time. Embeddings are removed via cascade.
+The image file is kept because it can be shared at the sha level.
 
-admin UI の各サンプルカードの「削除」ボタンから実行できる。
+Invoked from the "Delete" button on each sample card in the admin UI.
 
-リクエスト（form）: `project=<name>&sample_id=<原本のid>`（任意で `show_flip`）
-レスポンス: **303** で `/admin?project=<name>` に戻る（curl では `-i` で確認・`-L` で追従）。
+Request (form): `project=<name>&sample_id=<original id>` (optionally `show_flip`)
+Response: **303** redirect back to `/admin?project=<name>` (use `curl -i` to inspect, `-L` to follow).
 
 ```bash
 curl -i -X POST https://<host>/admin/delete -u "$ADMIN_USER:$ADMIN_PASS" \
@@ -129,24 +129,24 @@ curl -i -X POST https://<host>/admin/delete -u "$ADMIN_USER:$ADMIN_PASS" \
 
 ## GET /admin
 
-admin UI（**Basic 認証**）。project を選び、サンプルの一覧と向きをポチポチ修正する。
-詳細は [admin.md](admin.md)。修正は内部的に label と同じ経路を通る。
+Admin UI (**Basic auth**). Select a project, list samples, and correct facings by hand.
+See [admin.md](admin.md) for details. Corrections internally go through the same path as `label`.
 
 ## GET /healthz
 
-`{ "status": "ok", "model_loaded": true, "projects": 3 }`。認証不要。Railway のヘルスチェック用。
+`{ "status": "ok", "model_loaded": true, "projects": 3 }`. No auth. Used for Railway health checks.
 
 ---
 
-## ステータスコードとエラーコード
+## Status codes and error codes
 
-| HTTP | code | 意味 |
+| HTTP | code | meaning |
 |---|---|---|
-| 400 | `bad_image` | 画像がデコードできない・サイズ超過・形式非対応 |
-| 400 | `bad_request` | 必須フィールド欠落・facing が left/right 以外 |
-| 401 | `unauthorized` | API キー / Basic 認証なし・不正 |
-| 403 | `forbidden` | キーは有効だが project 不一致 |
-| 404 | `no_such_project` | project が存在しない |
-| 413 | `payload_too_large` | 画像が上限超過（[security.md](security.md)） |
-| 422 | （FastAPI 既定のバリデーションエラー） | |
-| 500 | `internal` | 想定外。握りつぶさずログに残す |
+| 400 | `bad_image` | image cannot be decoded / size exceeded / unsupported format |
+| 400 | `bad_request` | required field missing / `facing` is not `left` or `right` |
+| 401 | `unauthorized` | missing or invalid API key / Basic auth |
+| 403 | `forbidden` | key is valid but does not match the project |
+| 404 | `no_such_project` | project does not exist |
+| 413 | `payload_too_large` | image exceeds the size limit (see [security.md](security.md)) |
+| 422 | (FastAPI default validation error) | |
+| 500 | `internal` | unexpected. Do not swallow; log it |

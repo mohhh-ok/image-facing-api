@@ -1,88 +1,77 @@
-# 判定モデル
+# Prediction model
 
-## 全体像
+## Overview
 
 ```
-画像 ──[前処理]──▶ DINOv2 ViT-S/14 (ONNX) ──▶ 384次元ベクトル ──[L2正規化]──┐
-                                                                          ▼
-                              project のラベル付きベクトル集合 ──[cosine k-NN]──▶ 多数決 ──▶ {facing, confidence}
+image ──[preprocess]──▶ DINOv2 ViT-S/14 (ONNX) ──▶ 384-dim vector ──[L2 normalize]──┐
+                                                                                    ▼
+                              project's labeled vector set ──[cosine k-NN]──▶ majority vote ──▶ {facing, confidence}
 ```
 
-学習＝「ラベル付きベクトルを集合に足す」だけ。**勾配降下も再学習ステップも無い**。
-これが「立てっぱなしで判定と学習を回し続ける」を成立させる核。
+Training is just "append a labeled vector to the set." **No gradient descent, no retraining step.** This is what makes "keep the server up and let it predict and learn continuously" actually work.
 
-## なぜこの方式か（検討の記録）
+## Why this approach (decision record)
 
-| 方式 | 学習負荷 | 即時反映 | 少データ | 採否 |
+| Approach | Training cost | Instant updates | Small data | Decision |
 |---|---|---|---|---|
-| CNN を丸ごと fine-tune（ResNet 等） | 重い（CPU で数十分〜・GPU前提） | ✗（再学習が要る） | ✗ | 不採用 |
-| 埋め込み + ロジスティック回帰 | 軽い（秒） | △（再 fit が要る） | ◎ | 次点 |
-| **埋め込み + k-NN** | **ほぼゼロ** | **◎（足すだけ）** | ◎ | **採用** |
+| Full CNN fine-tuning (ResNet, etc.) | Heavy (tens of minutes on CPU, GPU assumed) | No (requires retraining) | No | Rejected |
+| Embeddings + logistic regression | Light (seconds) | Partial (requires refit) | Good | Runner-up |
+| **Embeddings + k-NN** | **Near zero** | **Yes (just append)** | Good | **Adopted** |
 
-少データ・CPU・即時反映の3つを同時に満たすのは k-NN。データが数万件に育って
-k-NN が粗くなってきたら、ロジスティック回帰や近似最近傍へ移行する余地は残す。
+k-NN is the only one that satisfies small data, CPU, and instant updates simultaneously. If the dataset grows to tens of thousands of samples and k-NN becomes too coarse, there is room to migrate to logistic regression or approximate nearest neighbor.
 
-## 埋め込みモデル: DINOv2 ViT-S/14
+## Embedding model: DINOv2 ViT-S/14
 
-- 自己教師あり学習の汎用視覚特徴。**線形プローブ / k-NN プローブが強い**＝少数ラベルでよく効く。
-  イラスト・キャラクター・写真などドメインをまたいでも、向きの差を特徴に保持しやすい。
-- ViT-S/14 は小型（約 21M params）で **CPU 推論でも 1 枚あたり数百 ms** に収まる。
-- 出力は 384 次元（CLS トークン）。これを L2 正規化して cosine 類似度で使う。
-- ONNX に変換して onnxruntime（CPU）で動かす。本番ランタイムに `torch` は入れない
-  （変換は `scripts/export_dinov2_onnx.py` でビルド時 or 事前に1回だけ）。
+- Self-supervised general-purpose visual features. **Strong linear-probe / k-NN-probe performance**, i.e. it works well with few labels. It tends to preserve facing differences in its features across domains like illustration, character art, and photos.
+- ViT-S/14 is small (about 21M params) and **CPU inference fits within a few hundred ms per image**.
+- Output is 384 dimensions (the CLS token). We L2-normalize it and use cosine similarity.
+- Converted to ONNX and run on onnxruntime (CPU). The production runtime does not include `torch` (conversion is done once via `scripts/export_dinov2_onnx.py` at build time or ahead of time).
 
-代替候補（必要なら差し替え可能に設計する）:
-- **CLIP ViT-B/32**: テキスト整合モデルだが視覚特徴も汎用。やや大きい。
-- DINOv2 ViT-B/14: 精度↑・速度↓。データが増えてからの選択肢。
+Alternative candidates (design to be swappable if needed):
+- **CLIP ViT-B/32**: a text-aligned model but its visual features are general-purpose. Slightly larger.
+- DINOv2 ViT-B/14: higher accuracy, lower speed. An option once data grows.
 
-`embed.py` は「画像 → 384次元 np.ndarray」のインターフェースに閉じ込め、モデル差し替えが
-DB/分類器に波及しないようにする。埋め込みの `model_name` と `dim` は DB に記録し、
-モデルを変えたら **再埋め込みが必要**なことを検知できるようにする。
+`embed.py` confines the interface to "image → 384-dim np.ndarray" so swapping models does not ripple into the DB or classifier. The `model_name` and `dim` of the embedding are recorded in the DB so we can detect when **re-embedding is required** after a model change.
 
-## 前処理（厳密に固定する）
+## Preprocessing (must be strictly fixed)
 
-判定とラベルで前処理が食い違うと精度が崩れる。**1 箇所（embed.py）に固定**する:
+If preprocessing differs between predict and label, accuracy collapses. **Fix it in one place (embed.py):**
 
-1. RGB に変換（透過 PNG は白 or 指定色で合成。姿絵は透過前提なので合成色は project 設定可にしてよい）。
-2. アスペクト比を保って短辺 224 にリサイズ → 中央 224x224 クロップ
-   （DINOv2 標準。向き判定では中央クロップで主要被写体が入る前提）。
-3. `[0,1]` 化 → ImageNet 平均 `[0.485,0.456,0.406]` / 標準偏差 `[0.229,0.224,0.225]` で正規化。
-4. NCHW float32。
+1. Convert to RGB (composite transparent PNGs onto white or a configured color. Character art assumes transparency, so the composite color can be project-configurable).
+2. Resize so the shorter side is 224 preserving aspect ratio, then center-crop 224x224 (DINOv2 standard; for facing prediction we assume the main subject is in the center crop).
+3. Scale to `[0,1]`, then normalize with ImageNet mean `[0.485,0.456,0.406]` / std `[0.229,0.224,0.225]`.
+4. NCHW float32.
 
-## k-NN 分類
+## k-NN classification
 
-- 距離: **cosine 類似度**（ベクトルは L2 正規化済みなので内積でよい）。
-- `k`: 既定 9（project ごとに上書き可）。ラベルが k 未満なら全件で多数決。
-- 多数決: 近傍 k 件の facing のうち多い方。同数なら **similarity 重み付き**で決める。
-- **flip 拡張があるため left/right の母数は構造的に均衡**する（後述）。
+- Distance: **cosine similarity** (vectors are L2-normalized, so a dot product suffices).
+- `k`: default 9 (overridable per project). If fewer than k labels exist, vote over all of them.
+- Majority vote: the more frequent facing among the top k neighbors. On ties, decide by **similarity-weighted** vote.
+- **Because of flip augmentation, the left/right counts are structurally balanced** (see below).
 
-## confidence の算出
+## Computing confidence
 
-近傍の「票の偏り」と「近さ」を掛け合わせる。実装の目安:
+Combine "vote skew" with "closeness" of neighbors. Reference implementation:
 
 ```
-votes_left, votes_right = 重み付き票（重み = similarity、または exp 距離）
-margin = |votes_left - votes_right| / (votes_left + votes_right)   # 0..1: 票の偏り
-top_sim = 最近傍の cosine 類似度                                    # 0..1: そもそも似た例があるか
+votes_left, votes_right = weighted votes (weight = similarity or exp distance)
+margin = |votes_left - votes_right| / (votes_left + votes_right)   # 0..1: vote skew
+top_sim = cosine similarity of the nearest neighbor                # 0..1: do similar examples exist at all?
 confidence = margin * clamp01((top_sim - sim_floor) / (1 - sim_floor))
 ```
 
-- `uncertain = confidence < UNCERTAIN_THRESHOLD`（既定 0.55 程度・env で調整）。
-- ラベル総数が少ない project では top_sim が伸びず自然に uncertain になりやすい
-  → クライアントはフォールバック（LLM）や admin に回す。これが立ち上げ期の正しい挙動。
+- `uncertain = confidence < UNCERTAIN_THRESHOLD` (default around 0.55, tunable via env).
+- For projects with few labels, `top_sim` stays low and predictions naturally fall into uncertain → the client falls back (to an LLM) or routes to admin. This is the correct behavior during the bootstrap phase.
 
-## flip 拡張（label 時のみ）
+## Flip augmentation (label-time only)
 
-- label 登録時、元画像に加えて**水平反転した画像の埋め込みを逆 facing で登録**する（`is_flip_aug=1`）。
-  - left の画像 → 反転すれば確実に right の正解データ。ラベルは 100% 正確。
-  - 効果: データが倍、left/right の母数が常に均衡、左右対称な判定境界になる。
-- **predict のクエリ画像は反転しない**（入力そのままの向きを判定したいので）。flip は学習側だけ。
-- 注意: 元と反転は強く相関するので、k-NN の近傍に元・反転が同時に入っても二重カウントしない工夫を入れてよい
-  （同一 `origin_sample_id` は1票に丸める等）。初版は素朴でよいが [database.md](database.md) に origin を持たせておく。
+- When a label is registered, in addition to the original image, **embed the horizontally flipped image and register it with the opposite facing** (`is_flip_aug=1`).
+  - A `left` image, flipped, is guaranteed correct data for `right`. The label is 100% accurate.
+  - Effect: doubles the data, keeps left/right counts balanced, and yields a left/right-symmetric decision boundary.
+- **Do not flip the query image at predict time** (we want to judge the input as-is). Flip is training-side only.
+- Note: the original and flipped vectors are strongly correlated, so consider a deduplication step to avoid double-counting when both end up among the k-NN neighbors (e.g. collapse to one vote per `origin_sample_id`). The first version can be naive, but [database.md](database.md) keeps the origin so we can add this later.
 
-## モデル更新時の再埋め込み
+## Re-embedding on model updates
 
-- 埋め込みモデルを変える / 前処理を変えると、既存ベクトルと互換でなくなる。
-- 対策: DB に `model_name`・`embed_version` を持ち、不一致なら起動時に警告し、
-  `scripts/` の再埋め込みジョブで `data/images/` の元画像から全件貼り直せるようにする。
-  （元画像を保存しておくのはこのため。）
+- Changing the embedding model or the preprocessing makes existing vectors incompatible.
+- Mitigation: store `model_name` and `embed_version` in the DB, warn at startup on mismatch, and provide a re-embedding job under `scripts/` that rebuilds everything from the original images in `data/images/`. (This is why we keep the original images.)

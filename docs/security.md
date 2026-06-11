@@ -1,50 +1,49 @@
-# セキュリティ
+# Security
 
-このサービスは **画像を受け取り left/right を返すだけ**で、LLM を呼ばず外部に副作用を持たない。
-攻撃面は「受け取る画像・メタデータ」と「認証」に限られる。
+This service only **takes an image and returns left/right**. It does not call an LLM and has no external side effects.
+The attack surface is limited to "the images and metadata it receives" and "authentication".
 
-## 認証
+## Authentication
 
-- **サービス間（predict / label）**: `X-API-Key` ヘッダ。project に紐づくキーを hash 照合（[multi-tenant.md](multi-tenant.md)）。
-- **admin / project 作成**: Basic 認証（`ADMIN_USER` / `ADMIN_PASS`）。
-- API キーは平文を DB に置かない（発行時のみ平文返却・以後は hash）。
-- 認証は**最初から付ける**前提で実装する。「あとで付ける」と公開時に漏れる。
-  ローカル開発でだけ `AUTH_DISABLED=1` で外せるようにしてよい（本番では絶対に立てない）。
-- **CSRF**: admin は Basic 認証でブラウザが資格情報を自動送信するため、状態変更の POST
-  （`/admin/correct`・`POST /v1/projects`）は **Origin/Referer の同一オリジン検査**で保護する
-  （`app/auth.py:verify_same_origin`）。Origin/Referer の無いサービス間呼び出し（curl 等）は素通し。
+- **Service-to-service (predict / label)**: `X-API-Key` header. Keys are scoped to a project and verified by hash ([multi-tenant.md](multi-tenant.md)).
+- **admin / project creation**: Basic auth (`ADMIN_USER` / `ADMIN_PASS`).
+- Never store API keys in plaintext in the DB (return plaintext only at issuance time; afterwards only the hash is kept).
+- Auth is wired in **from day one**. "Add it later" leaks at the moment you go public.
+  For local development only, `AUTH_DISABLED=1` may bypass it (never enable in production).
+- **CSRF**: admin uses Basic auth, so browsers auto-send credentials. State-changing POSTs
+  (`/admin/correct`, `POST /v1/projects`) are protected by **same-origin checks on Origin/Referer**
+  (`app/auth.py:verify_same_origin`). Service-to-service calls without Origin/Referer (curl, etc.) pass through.
 
-## untrusted input の扱い
+## Handling untrusted input
 
-外部から来るのは「画像」と「少量のメタデータ（external_id 等）」。
+What arrives from outside is "images" and "a small amount of metadata (external_id, etc.)".
 
-- **画像**:
-  - サイズ上限（例 10MB・`MAX_IMAGE_BYTES`）。超過は 413。
-  - デコードは Pillow。デコード失敗・非対応形式・ピクセル数過大（decompression bomb）を弾く
-    （`Image.MAX_IMAGE_PIXELS` を設定）。
-  - 画像経由のコード実行リスクは Pillow の既知 CVE に依存するので、依存を最新に保つ。
-  - `image_url` を受ける場合は **SSRF に注意**: 内部 IP / localhost / メタデータエンドポイント（169.254.169.254）を
-    ブロックし、スキームは https のみ、リダイレクト追跡を制限、タイムアウトを付ける。
-    不安なら初版は `image_url` を無効化し base64/multipart のみにする。
-  - 実装補足: 取得は**ストリーミングして累積バイトが `MAX_IMAGE_BYTES` 超で打ち切り**、Content-Length が
-    あれば事前に拒否する（DoS 対策）。ただしホスト検証は「名前解決 → 接続」の間の再解決により
-    **DNS リバインディングを完全には防げない**。本番で `ALLOW_IMAGE_URL=true` にする場合は
-    egress プロキシ / 許可リストの併用を前提とする（既定は false）。
-- **メタデータ（external_id, description, project 名）**:
-  - 長さ上限・文字種制限（project 名は英数ハイフンのみ）。
-  - SQL は必ずパラメータバインド（文字列連結禁止）。
-  - admin UI に表示するときは **HTML エスケープ**（テンプレートの自動エスケープを切らない）。
-- このサービスは受け取ったテキストを**指示として解釈する経路を持たない**（LLM なし）ので、
-  prompt injection の直接被害は無い。ただしクライアント側がこのサービスの出力をどう使うかは
-  クライアントの責務。
+- **Images**:
+  - Size cap (e.g. 10MB, `MAX_IMAGE_BYTES`). Over the limit returns 413.
+  - Decoded via Pillow. Decode failures, unsupported formats, and excessive pixel counts (decompression bombs) are rejected
+    (`Image.MAX_IMAGE_PIXELS` is set).
+  - Code-execution risk via images depends on known Pillow CVEs; keep dependencies up to date.
+  - When accepting `image_url`, **beware of SSRF**: block internal IPs / localhost / metadata endpoints (169.254.169.254),
+    allow only the https scheme, limit redirect following, and apply timeouts.
+    If in doubt, disable `image_url` in the initial release and accept only base64/multipart.
+  - Implementation note: fetches are **streamed and aborted when cumulative bytes exceed `MAX_IMAGE_BYTES`**; if Content-Length
+    is present, reject up front (DoS mitigation). However, host validation **cannot fully prevent DNS rebinding** due to
+    re-resolution between "name resolution" and "connect". If you enable `ALLOW_IMAGE_URL=true` in production, assume an
+    egress proxy / allow-list is also in place (default is false).
+- **Metadata (external_id, description, project name)**:
+  - Length caps and character-class restrictions (project name: alphanumerics and hyphens only).
+  - SQL always uses parameter binding (no string concatenation).
+  - When rendering in the admin UI, **HTML-escape** (do not disable the template's auto-escape).
+- This service has **no path that interprets received text as instructions** (no LLM), so it suffers no direct
+  prompt injection harm. How the client consumes this service's output, however, is the client's responsibility.
 
-## リソース・濫用対策
+## Resource / abuse mitigations
 
-- リクエストボディ上限・タイムアウト・（必要なら）project 単位のレート制限。
-- predict は画像を保存しない（監査ログを残すならハッシュのみ）。label のみ元画像を保存する。
-- ログに API キー平文・画像本体を出さない。
+- Request body cap, timeouts, and (if needed) per-project rate limiting.
+- predict does not persist images (if you want an audit log, store only hashes). Only label persists the original image.
+- Do not log plaintext API keys or raw image bodies.
 
-## 秘密情報
+## Secrets
 
-- `ADMIN_PASS`・API キー・（クライアント側の）LLM トークン等は env で渡し、リポにコミットしない。
-- `.env` はコミットしない（`.gitignore`）。本番は Railway の環境変数で設定。
+- `ADMIN_PASS`, API keys, and (client-side) LLM tokens are passed via env and never committed to the repo.
+- `.env` is not committed (`.gitignore`). In production, set via Railway environment variables.

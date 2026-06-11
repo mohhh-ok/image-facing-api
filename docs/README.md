@@ -1,28 +1,27 @@
-# ドキュメント目次
+# Documentation Index
 
-設計・仕様の正はこの `docs/` 配下。概要はルートの [README.md](../README.md) を参照。
+The source of truth for design and spec lives under this `docs/` directory. For a high-level overview, see the root [README.md](../README.md).
 
-**このリポは設計ドキュメント先行**で立ち上げてある。実装は docs に従って起こすこと。
-読む順番は上から下でよい（overview → architecture → api → model …）。
+**This repository is docs-first**: implementation follows the docs. Read top to bottom (overview → architecture → api → model …).
 
-| ドキュメント | 内容 |
+| Document | Contents |
 |---|---|
-| [overview.md](overview.md) | 目的・スコープ・非スコープ・用語（left/right の定義） |
-| [architecture.md](architecture.md) | 技術スタック・ディレクトリ構成・リクエストのデータフロー |
-| [api.md](api.md) | HTTP API 仕様（predict / label / projects / admin / healthz・リクエスト/レスポンス例） |
-| [usage.md](usage.md) | API 利用ガイド（呼ぶ側の how-to・curl/Python/TS 例・判定→確認修正→修正フロー） |
-| [model.md](model.md) | 判定モデル（DINOv2 埋め込み・k-NN・flip 拡張・confidence・前処理・モデル検討） |
-| [database.md](database.md) | SQLite スキーマ・画像/埋め込みの保存・マイグレーション方針 |
-| [multi-tenant.md](multi-tenant.md) | project キーによるテナント分離・API キー発行と検証 |
-| [admin.md](admin.md) | admin UI・Basic 認証・アクティブラーニングの運用フロー |
-| [security.md](security.md) | 認証・untrusted input（画像/メタデータ）の扱い・リソース制限 |
-| [env.md](env.md) | 環境変数一覧 |
-| [roadmap.md](roadmap.md) | 実装ステップ（フェーズ分け）・検証計画 |
+| [overview.md](overview.md) | Purpose, scope, non-goals, terminology (definition of left/right) |
+| [architecture.md](architecture.md) | Tech stack, directory layout, request data flow |
+| [api.md](api.md) | HTTP API spec (predict / label / projects / admin / healthz, request/response examples) |
+| [usage.md](usage.md) | API usage guide (how-to for callers, curl/Python/TS examples, predict → review → correct flow) |
+| [model.md](model.md) | Classification model (DINOv2 embeddings, k-NN, flip augmentation, confidence, preprocessing, model trade-offs) |
+| [database.md](database.md) | SQLite schema, image/embedding storage, migration policy |
+| [multi-tenant.md](multi-tenant.md) | Tenant isolation via the project key, API key issuance and verification |
+| [admin.md](admin.md) | Admin UI, Basic auth, active-learning operational flow |
+| [security.md](security.md) | Authentication, handling untrusted input (images/metadata), resource limits |
+| [env.md](env.md) | Environment variables |
+| [roadmap.md](roadmap.md) | Implementation steps (phased), validation plan |
 
-## 設計の前提（議論で確定済み）
+## Design Assumptions (already decided)
 
-- 目的は **汎用の left/right 判定**。複数サービスから再利用する。
-- スタックは **Python + FastAPI**（埋め込みモデルの推論が要なので ML エコシステムに寄せる）。
-- 判定は **DINOv2 埋め込み + k-NN**（CNN 丸ごと学習はしない＝少データ・CPU・即時反映）。
-- テナントは **project キーで分離**（ドメインの違う画像でラベルを混ぜない）。
-- リポは **独立リポ**（`~/Dev/image-facing-api`）。
+- The goal is a **general-purpose left/right classifier**, reusable from multiple services.
+- Stack is **Python + FastAPI** (the embedding model inference is central, so we stay close to the ML ecosystem).
+- Classification uses **DINOv2 embeddings + k-NN** (no end-to-end CNN training — small data, CPU, instant updates).
+- Tenants are **separated by the project key** (labels from different domains are never mixed).
+- This is an **independent repository** (`~/Dev/image-facing-api`).

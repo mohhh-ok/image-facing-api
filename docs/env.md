@@ -1,25 +1,25 @@
-# 環境変数一覧
+# Environment variables
 
-`app/config.py` で読み込む。`.env` はコミットしない（本番は Railway の環境変数）。
+Loaded by `app/config.py`. `.env` is not committed (in production, use Railway environment variables).
 
-| 変数 | 既定 | 説明 |
+| Variable | Default | Description |
 |---|---|---|
-| `PORT` | 8000 | 待受ポート（Railway が注入） |
-| `DATA_DIR` | `./data` | SQLite・画像・キャッシュの置き場。本番は `/data`（ボリューム） |
-| `MODEL_PATH` | `models/dinov2_vits14.onnx` | 埋め込み ONNX のパス。無ければ起動時に明示エラー |
-| `MODEL_NAME` | `dinov2_vits14` | DB に記録する埋め込みモデル名（再埋め込み判定用） |
-| `EMBED_VERSION` | 1 | 前処理込みの埋め込みバージョン。変えたら再埋め込み |
-| `KNN_K` | 9 | k-NN の既定 k（project 設定で上書き可） |
-| `UNCERTAIN_THRESHOLD` | 0.55 | confidence がこれ未満で `uncertain=true` |
-| `MAX_IMAGE_BYTES` | 10485760 | 受け取る画像の上限（10MB）。超過は 413 |
-| `ALLOW_IMAGE_URL` | `false` | `image_url` 受付の可否。SSRF 懸念があるので既定オフ（[security.md](security.md)） |
-| `ADMIN_USER` | （必須） | admin Basic 認証ユーザ |
-| `ADMIN_PASS` | （必須） | admin Basic 認証パスワード |
-| `AUTH_DISABLED` | `false` | **ローカル開発専用**。true で API キー/Basic を無効化。本番では絶対 true にしない |
-| `DEFAULT_PROJECT` | （任意） | 開発用の既定 project 名。本番は使わない |
-| `LOG_LEVEL` | `info` | ログレベル |
+| `PORT` | 8000 | Listen port (injected by Railway) |
+| `DATA_DIR` | `./data` | Location for SQLite, images, and cache. In production this is `/data` (volume) |
+| `MODEL_PATH` | `models/dinov2_vits14.onnx` | Path to the embedding ONNX. Startup fails explicitly if missing |
+| `MODEL_NAME` | `dinov2_vits14` | Embedding model name recorded in the DB (used to decide re-embedding) |
+| `EMBED_VERSION` | 1 | Embedding version, including preprocessing. Bumping it triggers re-embedding |
+| `KNN_K` | 9 | Default k for k-NN (overridable per project) |
+| `UNCERTAIN_THRESHOLD` | 0.55 | Confidence below this marks the result `uncertain=true` |
+| `MAX_IMAGE_BYTES` | 10485760 | Maximum accepted image size (10MB). Over the limit returns 413 |
+| `ALLOW_IMAGE_URL` | `false` | Whether to accept `image_url`. Off by default due to SSRF concerns ([security.md](security.md)) |
+| `ADMIN_USER` | (required) | admin Basic auth user |
+| `ADMIN_PASS` | (required) | admin Basic auth password |
+| `AUTH_DISABLED` | `false` | **Local development only.** When true, disables API key / Basic auth. Never set true in production |
+| `DEFAULT_PROJECT` | (optional) | Default project name for development. Not used in production |
+| `LOG_LEVEL` | `info` | Log level |
 
-## 認証・秘密情報
+## Auth / secrets
 
-- `ADMIN_PASS`・各 project の API キーはリポにコミットしない。
-- API キーは DB に hash 保存。env には置かない（発行時にレスポンスで一度だけ平文を返す）。
+- Never commit `ADMIN_PASS` or per-project API keys.
+- API keys are stored as hashes in the DB. Do not put them in env (the plaintext is returned exactly once in the issuance response).

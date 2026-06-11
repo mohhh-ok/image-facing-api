@@ -1,42 +1,37 @@
-# 目的・スコープ・用語
+# Purpose, Scope, Terminology
 
-## 目的
+## Purpose
 
-画像内の主たる被写体（キャラ・人・動物・物）が、**見る人から見て left / right のどちらを向いているか**
-を判定する HTTP サービス。判定は学習可能で、正解ラベルを与えるほど精度が上がる。
+An HTTP service that decides whether the main subject of an image (character, person, animal, object) is facing `left` or `right` **from the viewer's perspective**. Classification is trainable — accuracy improves as more ground-truth labels are added.
 
-本サービスは **特定ドメインに依存しない汎用判定器**として設計する
-（project キーでドメインを分離する → [multi-tenant.md](multi-tenant.md)）。
+The service is designed as a **domain-agnostic, general-purpose classifier** (domains are separated via the project key — see [multi-tenant.md](multi-tenant.md)).
 
-## left / right の定義（重要・全体で統一）
+## Definition of `left` / `right` (important — consistent across the project)
 
-**「viewer（画像を見ている人）から見た向き」** で統一する。
+The convention is **viewer-relative** (from the perspective of the person looking at the image):
 
-- `left`  = 被写体が **画面の左方向**を向いている（顔・体が左へ）。
-- `right` = 被写体が **画面の右方向**を向いている。
+- `left`  = the subject is facing **toward the left side of the frame** (face/body oriented left).
+- `right` = the subject is facing **toward the right side of the frame**.
 
-本サービスは基準をハードコードせず **ラベル（人が与えた正解）で学習する**ので、
-最終的な「何を left とするか」は **その project のラベル分布**が決める。
+The service does not hard-code any orientation rule — **it learns from human-provided labels**. In practice, "what counts as `left`" is determined by the label distribution within each project.
 
-## スコープ
+## Scope
 
-- 入力 1 枚に対する **left / right の二値判定** と confidence。
-- 正解ラベルの登録と、それによる即時の精度改善（k-NN）。
-- project 単位のテナント分離。
-- admin による手修正 UI。
+- **Binary `left` / `right` classification** of a single image, with a confidence score.
+- Registering ground-truth labels, with immediate accuracy improvement (k-NN).
+- Per-project tenant isolation.
+- Manual correction via an admin UI.
 
-## 非スコープ（やらないこと）
+## Non-goals (explicitly out of scope)
 
-- `front` / 多クラス / 角度（yaw 度数）の回帰。**二値のみ**（confidence で曖昧さは表現する）。
-  ※将来 front を足す余地は残すが、初版は二値。
-- 顔検出・骨格検出・物体検出そのもの（埋め込みは画像全体に対してかける）。
-- 画像の生成・加工・反転保存（**向きはデータとして返すだけ**。画像を反転して返さない。
-  反転表示はクライアント側の責務）。
-- LLM 呼び出し（このサービスは LLM を持たない）。
+- `front` / multi-class / continuous angle (yaw degree) regression. **Binary only** (ambiguity is expressed through confidence).
+  We may add `front` later, but the first version is binary.
+- Face detection, pose detection, or object detection per se (embeddings are computed over the whole image).
+- Image generation, modification, or storing flipped images (**facing is returned as data only**; the service does not return a flipped image. Flipping for display is the client's responsibility).
+- LLM calls (this service does not embed an LLM).
 
-## 設計判断の背景（なぜこの形か）
+## Why this shape
 
-- **なぜ CNN を fine-tune しないか**: 少データ・CPU・即時反映を満たせないため。詳細 [model.md](model.md)。
-- **なぜ独立サービスか**: 左右判定を複数サービスで再利用したいため（汎用化が目的）。
-- **なぜ画像を反転して返さないか**: バイナリ反転は不可逆でやり直しが効かない。向きを「データ」で持てば、
-  ラベルを直すだけで全クライアントの表示を後から修正でき、再生成も要らない。
+- **Why not fine-tune a CNN end-to-end**: it does not satisfy small-data, CPU-only, instant-update constraints. Details in [model.md](model.md).
+- **Why a standalone service**: left/right classification is reused across multiple services, so generalization is the goal.
+- **Why not return a flipped image**: binary flipping is lossy and hard to undo. If facing is held as data, fixing a label retroactively corrects every client's display without regenerating any image.

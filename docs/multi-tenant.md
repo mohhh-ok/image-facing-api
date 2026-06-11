@@ -1,38 +1,34 @@
-# マルチテナント（project 分離）
+# Multi-tenancy (project isolation)
 
-## なぜ分けるか
+## Why separate
 
-汎用サービスなので、クライアントごとに画像ドメインが違う（キャラクターイラスト / 写真 / 商品画像 …）。
-**「何を left とするか」はドメインで変わる**し、ラベルを混ぜると k-NN の近傍が他ドメインに汚染される。
-よって **project 単位でラベル空間・k-NN インデックス・API キーを完全分離**する。
+This is a general-purpose service, so each client has a different image domain (character illustration, photo, product image, ...). **What counts as `left` varies by domain**, and mixing labels contaminates k-NN neighbors with other domains. Therefore we **completely isolate the label space, k-NN index, and API key per project**.
 
-## project とは
+## What a project is
 
-- URL に出る識別子（`/v1/{project}/...`）。英数・ハイフンのみ（例 `my-project`）。
-- 1 project = 1 ラベル集合 = 1 k-NN インデックス = 1 API キー（複数キーにしたければ別テーブル化）。
-- predict / label は **必ず project スコープ**で動く。グローバル横断の判定はしない。
+- An identifier that appears in URLs (`/v1/{project}/...`). Alphanumeric and hyphen only (e.g. `my-project`).
+- 1 project = 1 label set = 1 k-NN index = 1 API key (split into a separate table if you need multiple keys).
+- predict / label always run **within project scope**. There is no global cross-project prediction.
 
-## API キー
+## API key
 
-- project 作成時（`POST /v1/projects`・admin 認証）に発行。
-- 形式の目安: `fk_live_<ランダム32桁>`。**平文は発行レスポンスでしか返さない**。
-- DB には `api_key_hash` のみ保存（hash は sha256 or argon2。検索性のため sha256 でも可だが、
-  漏洩時の安全性は [security.md](security.md) 参照）。
-- 検証: リクエストの `X-API-Key` を hash 化し、`projects.api_key_hash` と一致 かつ URL の project と一致を確認。
-  不一致は 401/403。
+- Issued at project creation (`POST /v1/projects`, admin auth).
+- Suggested format: `fk_live_<32 random chars>`. **The plaintext is returned only in the creation response.**
+- The DB stores only `api_key_hash` (sha256 or argon2; sha256 is acceptable for lookupability, but for safety on leak see [security.md](security.md)).
+- Validation: hash the request's `X-API-Key`, confirm it matches `projects.api_key_hash`, and confirm the URL project matches. Otherwise return 401/403.
 
-## ローテーション・無効化
+## Rotation and revocation
 
-- キー再発行は新しい hash で上書き（旧キーは即失効）。初版は「作り直し」で十分。
-- 将来複数キー / 失効日時が要るなら `api_keys(project, hash, label, revoked_at)` テーブルに分離。
+- Reissue overwrites with a new hash (the old key is immediately invalidated). For the first version, "recreate" is enough.
+- If multiple keys or expiration timestamps are needed later, split into an `api_keys(project, hash, label, revoked_at)` table.
 
-## admin とテナント
+## admin and tenants
 
-- admin（Basic 認証）は **全 project を横断**して閲覧・修正できる運用者向け。
-- admin UI は project を選んでラベルを直す（[admin.md](admin.md)）。
-- project の API キーは「サービス間の自動呼び出し」用、admin は「人が運用する」用、と役割を分ける。
+- admin (Basic auth) is for operators and **spans all projects** for browsing and editing.
+- The admin UI picks a project and fixes labels ([admin.md](admin.md)).
+- Project API keys are for "service-to-service automated calls"; admin is for "humans operating the system." Keep the roles distinct.
 
-## 既定 project
+## Default project
 
-- 開発の立ち上げを楽にするため、env で `DEFAULT_PROJECT` を1つ用意してもよい（任意）。
-- ただし本番では各クライアントに固有 project を切る。`default` に集約しない。
+- To ease early development, you may provide a single `DEFAULT_PROJECT` via env (optional).
+- In production, however, give each client its own project. Do not collapse everything into `default`.
