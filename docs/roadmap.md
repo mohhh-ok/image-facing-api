@@ -42,11 +42,9 @@
 - [ ] `railway.json`（`/healthz`・`/data` ボリューム）
 - [ ] 本番に project 作成、API キー発行
 
-## フェーズ 6: クライアント連携（ai-kyoto-osaka）
+## フェーズ 6: クライアント連携
 
-- [ ] `scripts/import_labels.py`（既存の facing_judgements / 画像から種ラベルを一括投入）
-- [ ] ai-kyoto-osaka 側を [client-integration.md](client-integration.md) どおり改修
-      （flop 廃止・`yokai.facing` 追加・UI 反転・`facing='left'` 初期化・フォールバック）
+- [ ] `scripts/import_labels.py`（既存ラベル/画像から種ラベルを一括投入する例）
 
 ## 検証の観点
 

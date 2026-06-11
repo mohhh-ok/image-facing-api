@@ -8,7 +8,7 @@
 
 ## project とは
 
-- URL に出る識別子（`/v1/{project}/...`）。英数・ハイフンのみ（例 `ai-kyoto-osaka`）。
+- URL に出る識別子（`/v1/{project}/...`）。英数・ハイフンのみ（例 `my-project`）。
 - 1 project = 1 ラベル集合 = 1 k-NN インデックス = 1 API キー（複数キーにしたければ別テーブル化）。
 - predict / label は **必ず project スコープ**で動く。グローバル横断の判定はしない。
 

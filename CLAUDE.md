@@ -25,7 +25,6 @@
 | [docs/admin.md](docs/admin.md) | admin UI・運用（アクティブラーニング） |
 | [docs/security.md](docs/security.md) | 認証・untrusted input・画像の扱い |
 | [docs/env.md](docs/env.md) | 環境変数一覧 |
-| [docs/client-integration.md](docs/client-integration.md) | クライアント連携（ai-kyoto-osaka の例） |
 | [docs/roadmap.md](docs/roadmap.md) | 実装ステップ |
 
 ## 押さえておくべき要点

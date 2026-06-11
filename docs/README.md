@@ -17,12 +17,11 @@
 | [admin.md](admin.md) | admin UI・Basic 認証・アクティブラーニングの運用フロー |
 | [security.md](security.md) | 認証・untrusted input（画像/メタデータ）の扱い・リソース制限 |
 | [env.md](env.md) | 環境変数一覧 |
-| [client-integration.md](client-integration.md) | クライアント連携手順（ai-kyoto-osaka を例に） |
 | [roadmap.md](roadmap.md) | 実装ステップ（フェーズ分け）・検証計画 |
 
 ## 設計の前提（議論で確定済み）
 
-- 目的は **汎用の left/right 判定**。ai-kyoto-osaka 専用ではなく、複数サービスから再利用する。
+- 目的は **汎用の left/right 判定**。複数サービスから再利用する。
 - スタックは **Python + FastAPI**（埋め込みモデルの推論が要なので ML エコシステムに寄せる）。
 - 判定は **DINOv2 埋め込み + k-NN**（CNN 丸ごと学習はしない＝少データ・CPU・即時反映）。
 - テナントは **project キーで分離**（ドメインの違う画像でラベルを混ぜない）。

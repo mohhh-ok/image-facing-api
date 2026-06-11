@@ -84,11 +84,11 @@ predict した結果 confidence が高ければ自動でラベル化する省力
 
 project を新規作成し API キーを発行する（**admin 認証必須**）。
 
-リクエスト: `{ "name": "ai-kyoto-osaka", "description": "妖怪姿絵の向き合わせ" }`
+リクエスト: `{ "name": "my-project", "description": "画像の左右向き判定" }`
 
 レスポンス:
 ```json
-{ "project": "ai-kyoto-osaka", "api_key": "fk_live_xxx", "created_at": "..." }
+{ "project": "my-project", "api_key": "fk_live_xxx", "created_at": "..." }
 ```
 `api_key` は**この応答でしか平文を返さない**（DB はハッシュ保存）。
 

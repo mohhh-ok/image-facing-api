@@ -6,7 +6,7 @@
 
 使い方:
     python scripts/import_labels.py \
-        --url http://localhost:8000 --project ai-kyoto-osaka --api-key fk_live_xxx \
+        --url http://localhost:8000 --project my-project --api-key fk_live_xxx \
         --root ./seed --source import
 """
 
