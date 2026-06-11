@@ -38,7 +38,7 @@
 
 ## フェーズ 5: デプロイ
 
-- [ ] `Dockerfile`（モデル同梱・torch 無し・[deploy.md](deploy.md)）
+- [ ] `Dockerfile`（モデル同梱・torch 無し）
 - [ ] `railway.json`（`/healthz`・`/data` ボリューム）
 - [ ] 本番に project 作成、API キー発行
 

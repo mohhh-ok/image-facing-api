@@ -16,7 +16,6 @@
 | [multi-tenant.md](multi-tenant.md) | project キーによるテナント分離・API キー発行と検証 |
 | [admin.md](admin.md) | admin UI・Basic 認証・アクティブラーニングの運用フロー |
 | [security.md](security.md) | 認証・untrusted input（画像/メタデータ）の扱い・リソース制限 |
-| [deploy.md](deploy.md) | Railway デプロイ・Dockerfile・ボリューム・モデル同梱 |
 | [env.md](env.md) | 環境変数一覧 |
 | [client-integration.md](client-integration.md) | クライアント連携手順（ai-kyoto-osaka を例に） |
 | [roadmap.md](roadmap.md) | 実装ステップ（フェーズ分け）・検証計画 |

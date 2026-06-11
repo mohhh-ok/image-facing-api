@@ -24,7 +24,6 @@
 | [docs/multi-tenant.md](docs/multi-tenant.md) | project キーによるテナント分離・API キー |
 | [docs/admin.md](docs/admin.md) | admin UI・運用（アクティブラーニング） |
 | [docs/security.md](docs/security.md) | 認証・untrusted input・画像の扱い |
-| [docs/deploy.md](docs/deploy.md) | Railway デプロイ・Docker・ボリューム |
 | [docs/env.md](docs/env.md) | 環境変数一覧 |
 | [docs/client-integration.md](docs/client-integration.md) | クライアント連携（ai-kyoto-osaka の例） |
 | [docs/roadmap.md](docs/roadmap.md) | 実装ステップ |
@@ -38,7 +37,7 @@
   **predict のクエリ画像は反転しない**（そのままの向きを判定したいので）。
 - **project でラベル空間を必ず分ける**。グローバルに混ぜない（[docs/multi-tenant.md](docs/multi-tenant.md)）。
 - **判定はこのサービスの責務だけ**。LLM は呼ばない。外部に副作用を持たない（画像→ラベルの純関数的サービス）。
-- **永続物は `/data` ボリューム**（SQLite・画像・埋め込み）。デプロイで消えてはならない（[docs/deploy.md](docs/deploy.md)）。
+- **永続物は `/data` ボリューム**（SQLite・画像・埋め込み）。デプロイで消えてはならない。
 
 ## 作業上の注意（ファイル破壊・事故防止）
 
