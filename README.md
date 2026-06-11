@@ -31,6 +31,12 @@ Designed to be reused from multiple services, so it stands alone as an HTTP API.
 Start with [`docs/README.md`](docs/README.md). This repository is
 **docs-first**: implementation follows the docs, not the other way around.
 
+## Example client
+
+A minimal React + TypeScript sample client is bundled under
+[`examples/react-client/`](examples/react-client/README.md). It shows the
+predict / label / per-project flow in a browser UI.
+
 ## Stack
 
 Python 3.12 / FastAPI / uvicorn / onnxruntime (DINOv2 ONNX, CPU) / SQLite / Railway.
