@@ -6,11 +6,15 @@
 
 ## セットアップ
 
+パッケージマネージャは **pnpm** を使います (npm より素のデフォルトでの
+サプライチェーン耐性が高いため: lifecycle script デフォルト無効・
+`minimumReleaseAge` 24h cooldown・exotic subdep ブロック)。
+
 ```bash
 cd examples/react-client
 cp .env.example .env       # VITE_API_BASE / VITE_PROJECT / VITE_API_KEY を埋める
-npm install
-npm run dev                # http://localhost:5173
+pnpm install
+pnpm dev                   # http://localhost:5173
 ```
 
 API キーは admin で project を作成したときに 1 度だけ平文で返るものを使う
