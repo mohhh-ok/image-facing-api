@@ -1,5 +1,5 @@
 [project]
-name = "ai-facing-api"
+name = "image-facing-api"
 version = "0.1.0"
 description = "汎用の left/right 向き判定マイクロサービス（DINOv2 埋め込み + k-NN）"
 readme = "README.md"

@@ -66,7 +66,7 @@ def create_app(
         finally:
             db.close()
 
-    app = FastAPI(title="ai-facing-api", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="image-facing-api", version="0.1.0", lifespan=lifespan)
 
     @app.exception_handler(AppError)
     async def _app_error_handler(_request: Request, exc: AppError) -> JSONResponse:

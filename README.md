@@ -1,4 +1,4 @@
-# ai-facing-api
+# image-facing-api
 
 A general-purpose microservice that decides whether the subject in an image
 is facing **left** or **right**.
