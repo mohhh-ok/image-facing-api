@@ -1,30 +1,46 @@
 # ai-facing-api
 
-画像内のキャラ・被写体が **どちら（left / right）を向いているか** を判定する、
-汎用の左右向き判定マイクロサービス。
+A general-purpose microservice that decides whether the subject in an image
+is facing **left** or **right**.
 
-複数のサービスから再利用する前提で、HTTP API として独立させてある
-（最初のクライアントは [ai-kyoto-osaka](../ai-kyoto-osaka) の妖怪姿絵の向き合わせ）。
+Designed to be reused from multiple services, so it stands alone as an HTTP API.
 
-## これは何をするものか
+## What it does
 
-- 画像を投げると `left` / `right` と確信度を返す（`POST /v1/{project}/predict`）。
-- 正解ラベルを投げると学習データに加わり、以降の判定が賢くなる（`POST /v1/{project}/label`）。
-- admin 画面でラベルをポチポチ修正でき、**直すほど精度が上がる**（human-in-the-loop）。
+- Send an image, get back `left` / `right` with a confidence score
+  (`POST /v1/{project}/predict`).
+- Send a ground-truth label and it joins the training set, making subsequent
+  predictions smarter (`POST /v1/{project}/label`).
+- The admin UI lets you correct labels by hand, and **accuracy goes up the more
+  you correct** (human-in-the-loop).
 
-## 設計の芯（3行）
+## Design in three lines
 
-- **埋め込み + k-NN**。DINOv2 で画像を特徴ベクトル化し、ラベル付きベクトルの近傍多数決で判定する。
-  CNN を丸ごと学習しないので、**少データ・CPU・即時反映**で回る。
-- **ラベル追加で即学習**。k-NN は近傍集合に1件足すだけ＝再学習ステップが無い。立てっぱなしで判定と学習を回し続けられる。
-- **project ごとにラベル空間を分離**（マルチテナント）。姿絵イラストと写真が混ざらない。
+- **Embeddings + k-NN.** DINOv2 turns each image into a feature vector;
+  prediction is a majority vote over the nearest labeled vectors.
+  No end-to-end CNN training, so it runs on **small data, CPU, with instant updates**.
+- **Adding a label = instant learning.** k-NN just appends one vector to the
+  neighbor set — no retraining step. The server keeps predicting and learning
+  while it stays up.
+- **Per-project label spaces** (multi-tenant). Illustration projects and
+  photo projects never mix labels.
 
-## ドキュメント
+## Documentation
 
-**設計・仕様の正は [`docs/`](docs/README.md) 配下。** まず [`docs/README.md`](docs/README.md) を読むこと。
-このリポジトリは **設計ドキュメント先行**で、実装はドキュメントに従って起こす。
+**The source of truth for design and spec lives under [`docs/`](docs/README.md).**
+Start with [`docs/README.md`](docs/README.md). This repository is
+**docs-first**: implementation follows the docs, not the other way around.
 
-## スタック
+## Stack
 
-Python 3.12 / FastAPI / uvicorn / onnxruntime（DINOv2 ONNX・CPU）/ SQLite / Railway。
-詳細は [docs/architecture.md](docs/architecture.md)。
+Python 3.12 / FastAPI / uvicorn / onnxruntime (DINOv2 ONNX, CPU) / SQLite / Railway.
+See [docs/architecture.md](docs/architecture.md) for details.
+
+## License
+
+The code in this repository is licensed under the [MIT License](LICENSE).
+
+The embedding model is Meta's [DINOv2](https://github.com/facebookresearch/dinov2)
+(ViT-S/14), exported to ONNX. **DINOv2 itself is licensed under Apache 2.0** —
+see the upstream repository for the authoritative terms. Users of this service
+must also comply with the upstream model license.
