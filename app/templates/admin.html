@@ -26,6 +26,11 @@
     .card form.del-form { margin: .3rem 0 0; }
     button.del { font-size: .72rem; padding: .2rem .55rem; color: #c0392b; border: 1px solid #c0392b55; border-radius: 5px; background: transparent; cursor: pointer; }
     button.del:hover { background: #c0392b; color: #fff; }
+    .create { margin: .6rem 0 1rem; padding: .6rem .8rem; border: 1px solid #8884; border-radius: 6px; display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+    .create input { padding: .3rem .5rem; border: 1px solid #8886; border-radius: 5px; font: inherit; background: transparent; color: inherit; }
+    .create button { padding: .3rem .7rem; border: 1px solid #4a90d9; background: #4a90d9; color: #fff; border-radius: 5px; cursor: pointer; font: inherit; }
+    .created-key { margin-top: .5rem; padding: .5rem .7rem; background: #d4edda; border: 1px solid #28a74566; border-radius: 5px; color: #155724; font-size: .85rem; }
+    .created-key code { display: inline-block; background: #fff; padding: .15rem .4rem; border-radius: 3px; user-select: all; }
   </style>
 </head>
 <body>
@@ -46,6 +51,17 @@
       <em>（project がまだありません）</em>
     {% endfor %}
   </div>
+
+  <form id="create-project" class="create" autocomplete="off">
+    <label for="new-project-name">新しい project:</label>
+    <input id="new-project-name" name="name" placeholder="my-project"
+           required pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,63}"
+           title="英数 + _ - 、64 文字以内">
+    <input id="new-project-desc" name="description" placeholder="説明（任意）">
+    <button type="submit">作成 + API キー発行</button>
+    <span id="create-msg" style="font-size:.8rem;opacity:.7"></span>
+  </form>
+  <div id="create-key" class="created-key" hidden></div>
 
   {% if selected %}
     <p>
@@ -88,5 +104,46 @@
   {% else %}
     <p>project を選んでください。</p>
   {% endif %}
+
+<script>
+// project 作成: POST /v1/projects に JSON を送り、平文 API キーを表示する
+// （平文はこの 1 度しか返らないので、コピーするまでページを閉じないこと）。
+document.getElementById("create-project").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = document.getElementById("new-project-name").value.trim();
+  const description = document.getElementById("new-project-desc").value.trim();
+  const msg = document.getElementById("create-msg");
+  const keyBox = document.getElementById("create-key");
+  msg.textContent = "作成中…";
+  keyBox.hidden = true;
+  try {
+    const res = await fetch("/v1/projects", {
+      method: "POST",
+      credentials: "same-origin",   // admin Basic 認証クッキー / 認証情報を引き継ぐ
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, description: description || undefined }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      msg.textContent = `エラー: ${json?.error?.message ?? res.statusText}`;
+      return;
+    }
+    msg.textContent = `作成しました: ${json.project}`;
+    keyBox.innerHTML =
+      `<div><strong>${json.project}</strong> の API キー (この画面でしか平文は表示されません):</div>` +
+      `<div style="margin-top:.3rem"><code>${json.api_key}</code></div>` +
+      `<div style="margin-top:.3rem">この値を <a href="/playground">/playground</a> の「API key」欄に貼り付けて使ってください。</div>`;
+    keyBox.hidden = false;
+    // 一覧を更新するためリロード（key 表示は失われるので、必ずコピーしてから）
+    setTimeout(() => {
+      if (confirm("project 一覧をリロードしますか？（API キーの平文表示はここで消えます。コピー済みならOK）")) {
+        location.reload();
+      }
+    }, 500);
+  } catch (err) {
+    msg.textContent = `通信エラー: ${err.message}`;
+  }
+});
+</script>
 </body>
 </html>

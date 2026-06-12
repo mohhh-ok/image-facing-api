@@ -36,8 +36,14 @@
   <h1>image-facing-api · playground</h1>
   <p class="muted">
     Minimal UI: send an image to get <code>left</code>/<code>right</code>, and if it's
-    wrong, register the correct answer as a label. Create a project and issue
-    an API key from <a href="/admin">/admin</a>.
+    wrong, register the correct answer as a label.
+  </p>
+  <p class="muted">
+    <strong>First time?</strong> Open <a href="/admin">/admin</a> (Basic auth:
+    the <code>ADMIN_USER</code> / <code>ADMIN_PASS</code> from your <code>.env</code>),
+    use the "新しい project" form to create a project, and copy the API key it
+    shows — the plaintext is only shown once. Paste the project name and key
+    into the fields below.
   </p>
 
   <div class="card">
@@ -168,13 +174,30 @@ async function call(path, extra) {
   if (!res.ok) {
     const code = json?.error?.code ?? "unknown";
     const msg = json?.error?.message ?? res.statusText;
-    throw new Error(`[${res.status} ${code}] ${msg}`);
+    const err = new Error(`[${res.status} ${code}] ${msg}`);
+    err.code = code;
+    err.status = res.status;
+    throw err;
   }
   return json;
 }
 
 function showError(e) {
-  $("error").textContent = e.message || String(e);
+  $("error").innerHTML = "";
+  const main = document.createElement("div");
+  main.textContent = e.message || String(e);
+  $("error").appendChild(main);
+  const hint = document.createElement("div");
+  hint.className = "muted";
+  hint.style.marginTop = ".4rem";
+  if (e.code === "no_such_project") {
+    hint.innerHTML = 'Create a project first at <a href="/admin">/admin</a> (the form labelled "新しい project").';
+  } else if (e.status === 401 || e.status === 403) {
+    hint.innerHTML = 'API key is missing or does not match this project. Issue or rotate one at <a href="/admin">/admin</a>.';
+  } else if (e.status === 503) {
+    hint.textContent = 'The embedding model is not loaded on the server (MODEL_PATH missing). Predict/label cannot run.';
+  }
+  if (hint.textContent || hint.innerHTML) $("error").appendChild(hint);
   $("error-card").hidden = false;
 }
 

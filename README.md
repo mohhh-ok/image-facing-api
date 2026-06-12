@@ -43,10 +43,17 @@ uv run uvicorn app.main:app --reload
 ```
 
 `.env` はプロセス起動時に自動で読まれます (既存の環境変数は上書きしない
-ので Railway 等の本番では透過)。`/admin` で project を作って API キーを
-発行し、`/playground` の入力欄に貼ると判定を試せます。判定モデル (DINOv2 ONNX)
-が無いと `predict`/`label` は 503 を返しますが、ページ自体と project 発行は
-動きます。
+ので Railway 等の本番では透過)。
+
+初回フロー:
+
+1. `/admin` を Basic 認証 (`ADMIN_USER` / `ADMIN_PASS`) で開く
+2. ページ上部の「新しい project」フォームで project を作成 — 応答に
+   **平文の API キーが1度だけ**表示されるのでコピーする
+3. `/playground` を開いて project 名と API キーを貼り、画像をドロップ
+
+判定モデル (DINOv2 ONNX) が無いと `predict`/`label` は 503 を返しますが、
+ページ自体と project 発行は動きます。
 
 ## Stack
 
