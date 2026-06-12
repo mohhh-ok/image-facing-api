@@ -33,10 +33,20 @@ Start with [`docs/README.md`](docs/README.md). This repository is
 
 ## Try it in a browser
 
-A zero-build try-it page is served by the API itself at **`GET /try`**
-(no auth on the page; the in-browser form sends your project / API key as
-`X-API-Key` to `/v1/{project}/predict` and `/v1/{project}/label`). Spin up
-the service with `uvicorn` and open `http://localhost:8000/try`.
+A zero-build try-it page is served by the API itself at **`GET /try`**.
+
+```bash
+cp .env.example .env             # ADMIN_USER / ADMIN_PASS をお好みで編集
+uv sync
+uv run uvicorn app.main:app --reload
+# → open http://localhost:8000/try
+```
+
+`.env` はプロセス起動時に自動で読まれます (既存の環境変数は上書きしない
+ので Railway 等の本番では透過)。`/admin` で project を作って API キーを
+発行し、`/try` の入力欄に貼ると判定を試せます。判定モデル (DINOv2 ONNX)
+が無いと `predict`/`label` は 503 を返しますが、ページ自体と project 発行は
+動きます。
 
 ## Stack
 

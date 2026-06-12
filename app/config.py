@@ -11,6 +11,13 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# プロジェクトルートの .env をプロセス起動時に1度だけ読む。
+# 既存の環境変数は上書きしない（override=False がデフォルト）ので、
+# Railway などで env が注入されている本番では .env は無視される。
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
 
 def _bool(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
