@@ -132,14 +132,13 @@ document.getElementById("create-project").addEventListener("submit", async (e) =
     keyBox.innerHTML =
       `<div>API key for <strong>${json.project}</strong> (shown in plaintext only here, only this once):</div>` +
       `<div style="margin-top:.3rem"><code>${json.api_key}</code></div>` +
-      `<div style="margin-top:.3rem">Paste this into the "API key" field on <a href="/playground">/playground</a>.</div>`;
+      `<div style="margin-top:.3rem">Paste this into the "API key" field on <a href="/playground">/playground</a>.` +
+      ` Once you have copied it, <a href="#" id="reload-list">reload this page</a> to refresh the project list (the key above will disappear).</div>`;
     keyBox.hidden = false;
-    // 一覧を更新するためリロード（key 表示は失われるので、必ずコピーしてから）
-    setTimeout(() => {
-      if (confirm("Reload the project list? The plaintext API key shown above will disappear — only proceed if you have copied it.")) {
-        location.reload();
-      }
-    }, 500);
+    document.getElementById("reload-list").addEventListener("click", (ev) => {
+      ev.preventDefault();
+      location.reload();
+    });
   } catch (err) {
     msg.textContent = `Network error: ${err.message}`;
   }
