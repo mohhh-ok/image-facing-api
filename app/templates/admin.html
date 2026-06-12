@@ -12,13 +12,30 @@
     .projects a.active { font-weight: 700; text-decoration: underline; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1rem; margin-top: 1rem; }
     .card { border: 1px solid #8884; border-radius: 8px; padding: .5rem; text-align: center; }
-    .thumb { width: 150px; height: 150px; object-fit: contain; background: #8881; }
+    .thumb-wrap { position: relative; width: 150px; height: 150px; margin: 0 auto; }
+    .thumb { width: 150px; height: 150px; object-fit: contain; background: #8881; display: block; }
     /* left に揃えて並べると外れ値が目立つ: right のものを表示反転して全部左向きに見せる */
     .face-right .thumb { transform: scaleX(-1); }
-    .toggle { display: flex; gap: .25rem; margin-top: .4rem; }
-    .toggle button { flex: 1; padding: .3rem; cursor: pointer; }
-    .toggle button.on { background: #4a90d9; color: #fff; border-color: #4a90d9; }
-    .meta { font-size: .75rem; opacity: .7; margin-top: .25rem; }
+    .face-right { border-color: #c0392b88; }
+    .face-right .thumb { outline: 2px solid #c0392b66; outline-offset: -2px; }
+    .left-hint {
+      position: absolute; top: 6px; left: 6px;
+      color: #4a90d9; opacity: .9;
+      pointer-events: none;
+      display: flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px;
+      background: #ffffffcc; border-radius: 50%;
+    }
+    .left-hint svg { width: 16px; height: 16px; }
+    .face-right .left-hint { color: #c0392b; }
+    .label-line { font-size: .78rem; margin-top: .3rem; }
+    .label-line .tag-left { color: #2c7a3e; }
+    .label-line .tag-right { color: #c0392b; }
+    .label-line .mirrored { opacity: .7; font-size: .7rem; display: block; }
+    .flip-form { margin-top: .3rem; }
+    .flip-form button { width: 100%; padding: .3rem; cursor: pointer; }
+    .meta { font-size: .72rem; opacity: .6; margin-top: .25rem; }
+    .banner { margin: .8rem 0; padding: .5rem .7rem; background: #4a90d922; border: 1px solid #4a90d955; border-radius: 5px; font-size: .85rem; }
     form.inline { display: contents; }
     .proj { display: inline-flex; align-items: center; gap: .2rem; margin-right: .75rem; }
     .inline-key { display: inline; margin: 0; }
@@ -64,6 +81,11 @@
   <div id="create-key" class="created-key" hidden></div>
 
   {% if selected %}
+    <div class="banner">
+      All thumbnails are normalized to face <strong>left</strong> for easier outlier spotting —
+      samples labeled <span style="color:#c0392b">right</span> are shown mirrored (red outline).
+      Click <strong>Flip label</strong> on any card whose real-world orientation is wrong.
+    </div>
     <p>
       <a href="/admin?project={{ selected }}{% if not show_flip %}&show_flip=true{% endif %}">
         {% if show_flip %}hide flip augmentations{% else %}also show flip augmentations{% endif %}
@@ -74,16 +96,32 @@
     <div class="grid">
       {% for s in samples %}
         <div class="card {% if s.facing == 'right' %}face-right{% endif %}">
-          <img class="thumb" src="/admin/image/{{ s.image_sha256 }}" alt="sample {{ s.id }}" loading="lazy">
-          <div class="toggle">
-            <form class="inline" method="post" action="/admin/correct">
-              <input type="hidden" name="project" value="{{ selected }}">
-              <input type="hidden" name="sample_id" value="{{ s.id }}">
-              <input type="hidden" name="show_flip" value="{{ 'true' if show_flip else 'false' }}">
-              <button type="submit" name="facing" value="left" class="{% if s.facing == 'left' %}on{% endif %}">← left</button>
-              <button type="submit" name="facing" value="right" class="{% if s.facing == 'right' %}on{% endif %}">right →</button>
-            </form>
+          <div class="thumb-wrap">
+            <img class="thumb" src="/admin/image/{{ s.image_sha256 }}" alt="sample {{ s.id }}" loading="lazy">
+            <span class="left-hint" title="All thumbnails are normalized to face left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 12H4"/>
+                <path d="M10 6l-6 6 6 6"/>
+              </svg>
+            </span>
           </div>
+          <div class="label-line">
+            labeled:
+            {% if s.facing == 'left' %}
+              <strong class="tag-left">left</strong>
+            {% else %}
+              <strong class="tag-right">right</strong>
+              <span class="mirrored">(image mirrored for display)</span>
+            {% endif %}
+          </div>
+          <form class="flip-form" method="post" action="/admin/correct">
+            <input type="hidden" name="project" value="{{ selected }}">
+            <input type="hidden" name="sample_id" value="{{ s.id }}">
+            <input type="hidden" name="show_flip" value="{{ 'true' if show_flip else 'false' }}">
+            <input type="hidden" name="facing" value="{{ 'right' if s.facing == 'left' else 'left' }}">
+            <button type="submit">Flip label → {{ 'right' if s.facing == 'left' else 'left' }}</button>
+          </form>
           <div class="meta">
             #{{ s.id }} · {{ s.source }}{% if s.is_flip_aug %} · flip{% endif %}
           </div>
