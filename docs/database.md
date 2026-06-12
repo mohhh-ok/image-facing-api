@@ -1,6 +1,6 @@
 # Persistence and DB schema
 
-A single SQLite file (`/data/facing.db`, WAL mode). All SQL is consolidated in `app/db.py`. Original image data is stored at `/data/images/<sha256>.png`; the DB holds only paths/hashes, not the image bytes themselves.
+A single SQLite file (`/data/facing.db`, WAL mode). All SQL is consolidated in `app/db.py`. Label images are downscaled to a long-side 256px JPEG and stored at `/data/images/<sha256>.jpg` (admin display only — re-embedding is served by the stored vectors in the `embeddings` table). The DB holds only paths/hashes, not the image bytes themselves.
 
 ## Why SQLite
 

@@ -40,7 +40,7 @@ What arrives from outside is "images" and "a small amount of metadata (external_
 ## Resource / abuse mitigations
 
 - Request body cap, timeouts, and (if needed) per-project rate limiting.
-- predict does not persist images (if you want an audit log, store only hashes). Only label persists the original image.
+- predict does not persist images (if you want an audit log, store only hashes). Only label persists an image, and only as a long-side 256px JPEG thumbnail for admin display — not the original bytes.
 - Do not log plaintext API keys or raw image bodies.
 
 ## Secrets

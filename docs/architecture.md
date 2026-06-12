@@ -41,7 +41,7 @@ models/
   dinov2_vits14.onnx      Bundled embedding model (Git LFS or fetched at build time)
 data/                     (gitignored) SQLite, images, cache for local runs
   facing.db
-  images/                 Original images stored by sha256 (for admin display and re-embedding)
+  images/                 Long-side 256px JPEG thumbnails stored by sha256 (admin display only)
 docs/                     Design documentation (this directory)
 Dockerfile
 railway.json
@@ -70,7 +70,7 @@ Images are not stored on predict (they are not labels). An audit log entry may o
 POST /v1/{project}/label  (image + facing)
   → auth
   → decode image → sha256 (if a duplicate, update facing)
-  → save the original image to data/images/<sha>.png (for admin display and future re-embedding)
+  → save a long-side 256px JPEG thumbnail to data/images/<sha>.jpg (admin display only)
   → DINOv2 → vector → save to samples/embeddings (source='human', etc.)
   → flip augmentation: embed the horizontally flipped image and add it with the inverted facing (is_flip_aug=1)
   → also add to the in-memory project index (effective immediately, no retraining)

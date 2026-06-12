@@ -74,4 +74,4 @@ confidence = margin * clamp01((top_sim - sim_floor) / (1 - sim_floor))
 ## Re-embedding on model updates
 
 - Changing the embedding model or the preprocessing makes existing vectors incompatible.
-- Mitigation: store `model_name` and `embed_version` in the DB, warn at startup on mismatch, and provide a re-embedding job under `scripts/` that rebuilds everything from the original images in `data/images/`. (This is why we keep the original images.)
+- Mitigation: store `model_name` and `embed_version` in the DB, warn at startup on mismatch. Re-embedding is **served by the existing vectors in the `embeddings` table** as long as the model is unchanged — the long-side 256px JPEG thumbnails in `data/images/` are kept for admin display only and are sufficient to re-embed into DINOv2-class (224px input) models, but not high-resolution successors. Swapping to a model that requires the original resolution is out of scope.

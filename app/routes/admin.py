@@ -85,7 +85,11 @@ def admin_delete(
 def admin_image(request: Request, sha: str):
     if not _SHA_RE.match(sha):
         raise bad_request("不正な画像 ID です")
-    path = request.app.state.settings.images_dir / f"{sha}.png"
-    if not path.exists():
-        raise bad_request("画像が見つかりません")
-    return FileResponse(str(path), media_type="image/png")
+    images_dir = request.app.state.settings.images_dir
+    jpg = images_dir / f"{sha}.jpg"
+    if jpg.exists():
+        return FileResponse(str(jpg), media_type="image/jpeg")
+    png = images_dir / f"{sha}.png"
+    if png.exists():
+        return FileResponse(str(png), media_type="image/png")
+    raise bad_request("画像が見つかりません")

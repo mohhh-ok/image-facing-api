@@ -1,7 +1,7 @@
 """画像の取り込み・検疫（docs/security.md の untrusted input 対策）。
 
 - サイズ上限・decompression bomb 対策・デコード失敗を弾く。
-- sha256 で重複検出、元画像を data/images/<sha>.png に保存。
+- sha256 で重複検出、admin 表示用に縮小 JPEG を data/images/<sha>.jpg に保存。
 - flip 拡張用の水平反転もここで行う。
 """
 
@@ -44,13 +44,25 @@ def decode_image(data: bytes, max_bytes: int) -> Image.Image:
     return img
 
 
+ADMIN_THUMB_MAX_SIDE = 256
+ADMIN_THUMB_JPEG_QUALITY = 85
+
+
 def save_original(images_dir: Path, data: bytes, sha: str) -> Path:
-    """元画像を data/images/<sha>.png に保存（既にあれば何もしない）。"""
+    """admin 表示用に長辺 256px の JPEG へ縮小して data/images/<sha>.jpg に保存。
+
+    再埋め込みは DB の embeddings テーブルに既存ベクトルが残っているため、原寸の保持は
+    不要（同モデルなら再計算不要、別モデルに乗り換える保険はここで諦める）。
+    """
     images_dir.mkdir(parents=True, exist_ok=True)
-    path = images_dir / f"{sha}.png"
-    if not path.exists():
-        img = Image.open(io.BytesIO(data))
-        img.save(path, format="PNG")
+    path = images_dir / f"{sha}.jpg"
+    if path.exists():
+        return path
+    img = Image.open(io.BytesIO(data))
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    img.thumbnail((ADMIN_THUMB_MAX_SIDE, ADMIN_THUMB_MAX_SIDE), Image.LANCZOS)
+    img.save(path, format="JPEG", quality=ADMIN_THUMB_JPEG_QUALITY, optimize=True)
     return path
 
 
