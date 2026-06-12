@@ -1,4 +1,4 @@
-"""簡易お試し UI（GET /try）。
+"""簡易 Playground UI（GET /playground）。
 
 依存ゼロで「画像を投げて facing を見る → 間違いを label として登録」までを
 ブラウザ単体で試すための一枚 HTML。認証は不要だが、API 呼び出しには
@@ -20,6 +20,6 @@ _TEMPLATES = Jinja2Templates(
 )
 
 
-@router.get("/try", response_class=HTMLResponse)
-def try_home(request: Request):
-    return _TEMPLATES.TemplateResponse(request, "try.html", {})
+@router.get("/playground", response_class=HTMLResponse)
+def playground_home(request: Request):
+    return _TEMPLATES.TemplateResponse(request, "playground.html", {})

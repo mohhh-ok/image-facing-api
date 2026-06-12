@@ -18,7 +18,7 @@ from .config import Settings, get_settings
 from .db import Database
 from .embed import Dinov2OnnxEmbedder, Embedder
 from .errors import AppError
-from .routes import admin, health, label, predict, projects, try_ui
+from .routes import admin, health, label, playground, predict, projects
 from .store import Store
 
 logger = logging.getLogger("facing")
@@ -89,7 +89,7 @@ def create_app(
     app.include_router(predict.router)
     app.include_router(label.router)
     app.include_router(admin.router)
-    app.include_router(try_ui.router)
+    app.include_router(playground.router)
     return app
 
 

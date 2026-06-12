@@ -33,18 +33,18 @@ Start with [`docs/README.md`](docs/README.md). This repository is
 
 ## Try it in a browser
 
-A zero-build try-it page is served by the API itself at **`GET /try`**.
+A zero-build playground UI is served by the API itself at **`GET /playground`**.
 
 ```bash
 cp .env.example .env             # ADMIN_USER / ADMIN_PASS をお好みで編集
 uv sync
 uv run uvicorn app.main:app --reload
-# → open http://localhost:8000/try
+# → open http://localhost:8000/playground
 ```
 
 `.env` はプロセス起動時に自動で読まれます (既存の環境変数は上書きしない
 ので Railway 等の本番では透過)。`/admin` で project を作って API キーを
-発行し、`/try` の入力欄に貼ると判定を試せます。判定モデル (DINOv2 ONNX)
+発行し、`/playground` の入力欄に貼ると判定を試せます。判定モデル (DINOv2 ONNX)
 が無いと `predict`/`label` は 503 を返しますが、ページ自体と project 発行は
 動きます。
 

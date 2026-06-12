@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>image-facing-api try</title>
+  <title>image-facing-api playground</title>
   <style>
     :root { color-scheme: light dark; }
     body { font-family: system-ui, -apple-system, sans-serif; margin: 1.5rem auto; max-width: 720px; padding: 0 1rem; }
@@ -33,7 +33,7 @@
   </style>
 </head>
 <body>
-  <h1>image-facing-api · try it</h1>
+  <h1>image-facing-api · playground</h1>
   <p class="muted">
     Minimal UI: send an image to get <code>left</code>/<code>right</code>, and if it's
     wrong, register the correct answer as a label. Create a project and issue
@@ -45,14 +45,20 @@
     <div class="row">
       <div>
         <label>project</label>
-        <input id="project" placeholder="demo">
+        <input id="project" name="project" placeholder="demo"
+               autocomplete="off">
       </div>
       <div>
         <label>API key (X-API-Key)</label>
-        <input id="apikey" type="password" placeholder="fk_live_...">
+        <input id="apikey" name="apikey" type="password" placeholder="fk_live_..."
+               autocomplete="new-password" autocapitalize="off" spellcheck="false">
       </div>
     </div>
-    <p class="muted">Saved in localStorage. Persists across browser restarts.</p>
+    <p class="muted">
+      Project name is remembered for this tab only (sessionStorage). The API key
+      is held <strong>in memory only</strong>: it is never written to storage,
+      and is gone on reload. Paste it each time.
+    </p>
   </div>
 
   <div class="card">
@@ -99,21 +105,16 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const LS = "image-facing-api.try";
-
-function loadCfg() {
-  try { return JSON.parse(localStorage.getItem(LS) || "{}"); } catch { return {}; }
-}
-function saveCfg() {
-  localStorage.setItem(LS, JSON.stringify({ project: $("project").value, apikey: $("apikey").value }));
-}
+// 注意: localStorage は使わない（origin 共有なので localhost:8000 上の別アプリと
+// 干渉する）。project だけ sessionStorage（tab スコープ）、API キーは保存しない。
+const SS_KEY = "image-facing-api.playground.project";
 
 (function initCfg() {
-  const cfg = loadCfg();
-  $("project").value = cfg.project || "";
-  $("apikey").value = cfg.apikey || "";
-  $("project").addEventListener("input", saveCfg);
-  $("apikey").addEventListener("input", saveCfg);
+  $("project").value = sessionStorage.getItem(SS_KEY) || "";
+  $("project").addEventListener("input", () => {
+    sessionStorage.setItem(SS_KEY, $("project").value);
+  });
+  // API キーは意図的にどこにも保存しない（メモリ＝input 要素の値のみ）。
 })();
 
 let currentFile = null;
