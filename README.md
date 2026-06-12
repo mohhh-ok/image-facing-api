@@ -1,9 +1,18 @@
 # image-facing-api
 
-A general-purpose microservice that decides whether the subject in an image
-is facing **left** or **right**.
+An HTTP microservice that decides whether the subject in an image is facing
+**left** or **right**.
 
-Designed to be reused from multiple services, so it stands alone as an HTTP API.
+Originally built for **aligning the facing direction of AI-generated
+characters** (transparent / plain-background cutouts of a single subject),
+which is the case it works best on out of the box.
+
+It is not restricted to that use case, but **the input is assumed to be an
+isolated single subject**. Busy backgrounds drag the DINOv2 embedding toward
+the scene rather than the subject, so k-NN accuracy drops. Photographs can
+work too if you preprocess them the same way — cut the subject out (rembg /
+SAM / etc.) before sending, keep one subject category per `project`, and feed
+enough labels for k-NN to settle.
 
 ## What it does
 
@@ -30,6 +39,12 @@ Designed to be reused from multiple services, so it stands alone as an HTTP API.
 **The source of truth for design and spec lives under [`docs/`](docs/README.md).**
 Start with [`docs/README.md`](docs/README.md). This repository is
 **docs-first**: implementation follows the docs, not the other way around.
+
+## Screenshots
+
+| Playground (`/playground`) | Admin (`/admin`) |
+| --- | --- |
+| ![Playground](screenshots/judge.jpg) | ![Admin](screenshots/admin.jpg) |
 
 ## Try it in a browser
 
