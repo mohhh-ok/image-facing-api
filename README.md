@@ -31,11 +31,12 @@ Designed to be reused from multiple services, so it stands alone as an HTTP API.
 Start with [`docs/README.md`](docs/README.md). This repository is
 **docs-first**: implementation follows the docs, not the other way around.
 
-## Example client
+## Try it in a browser
 
-A minimal React + TypeScript sample client is bundled under
-[`examples/react-client/`](examples/react-client/README.md). It shows the
-predict / label / per-project flow in a browser UI.
+A zero-build try-it page is served by the API itself at **`GET /try`**
+(no auth on the page; the in-browser form sends your project / API key as
+`X-API-Key` to `/v1/{project}/predict` and `/v1/{project}/label`). Spin up
+the service with `uvicorn` and open `http://localhost:8000/try`.
 
 ## Stack
 

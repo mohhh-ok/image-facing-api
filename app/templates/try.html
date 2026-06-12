@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>image-facing-api try</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; margin: 1.5rem auto; max-width: 720px; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; margin: 0 0 1rem; }
+    h2 { font-size: .9rem; margin: 0 0 .6rem; opacity: .7; }
+    .card { border: 1px solid #8884; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+    label { display: block; font-size: .75rem; opacity: .7; margin-bottom: .2rem; }
+    input { width: 100%; padding: .35rem .5rem; border: 1px solid #8886; border-radius: 5px; box-sizing: border-box; font: inherit; background: transparent; color: inherit; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-bottom: .6rem; }
+    button { padding: .45rem .9rem; border: 1px solid #8886; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; font: inherit; }
+    button.primary { background: #4a90d9; color: #fff; border-color: #4a90d9; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .drop { border: 2px dashed #8886; border-radius: 8px; padding: 1.5rem; text-align: center; opacity: .8; cursor: pointer; }
+    .drop.over { border-color: #4a90d9; background: #4a90d922; }
+    .preview { display: flex; gap: 1rem; align-items: flex-start; margin-top: 1rem; }
+    .preview img { max-width: 200px; max-height: 200px; border-radius: 6px; border: 1px solid #8884; }
+    .facing { font-size: 1.8rem; font-weight: 700; }
+    .facing.left { color: #4a90d9; }
+    .facing.right { color: #c0392b; }
+    .muted { font-size: .8rem; opacity: .7; }
+    .bar { height: 6px; background: #8884; border-radius: 3px; overflow: hidden; margin: .4rem 0; }
+    .bar > div { height: 100%; background: #27ae60; }
+    .warn { color: #d68910; font-size: .85rem; }
+    .err { color: #c0392b; }
+    .actions { display: flex; gap: .5rem; margin-top: .6rem; flex-wrap: wrap; }
+    pre { background: #8881; border: 1px solid #8884; border-radius: 5px; padding: .5rem; overflow: auto; font-size: .75rem; }
+  </style>
+</head>
+<body>
+  <h1>image-facing-api · お試し</h1>
+  <p class="muted">
+    画像を投げて <code>left</code>/<code>right</code> を判定し、間違っていれば正解を label として登録するだけの最小 UI です。
+    project と API キーは <a href="/admin">/admin</a> で発行できます。
+  </p>
+
+  <div class="card">
+    <h2>接続</h2>
+    <div class="row">
+      <div>
+        <label>project</label>
+        <input id="project" placeholder="demo">
+      </div>
+      <div>
+        <label>API キー (X-API-Key)</label>
+        <input id="apikey" type="password" placeholder="fk_live_...">
+      </div>
+    </div>
+    <p class="muted">localStorage に保存されます。ブラウザを閉じても残ります。</p>
+  </div>
+
+  <div class="card">
+    <h2>画像</h2>
+    <div id="drop" class="drop">ここに画像をドロップ、またはクリックして選択</div>
+    <input id="file" type="file" accept="image/*" style="display:none">
+
+    <div id="preview" class="preview" hidden>
+      <img id="img" alt="preview">
+      <div style="flex:1">
+        <div class="actions">
+          <button id="predict" class="primary">judge (predict)</button>
+          <button id="clear">クリア</button>
+        </div>
+        <p id="ready-warn" class="warn" hidden>project と API キーを入力してください</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="result-card" class="card" hidden>
+    <h2>判定結果</h2>
+    <div id="facing" class="facing"></div>
+    <div id="meta" class="muted"></div>
+    <div class="bar"><div id="bar-fill"></div></div>
+    <p id="uncertain" class="warn" hidden>
+      uncertain: 票が割れた / 近傍が遠い / ラベルが少ない可能性。正解を label に登録すると次回から反映されます。
+    </p>
+
+    <h2 style="margin-top:1rem">正解として登録 (label)</h2>
+    <div class="actions">
+      <button id="label-left">← left として登録</button>
+      <button id="label-right">right として登録 →</button>
+    </div>
+    <p id="label-msg" class="muted"></p>
+
+    <details style="margin-top:1rem">
+      <summary class="muted">近傍 (k-NN)</summary>
+      <pre id="neighbors"></pre>
+    </details>
+  </div>
+
+  <div id="error-card" class="card" hidden><p id="error" class="err"></p></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const LS = "image-facing-api.try";
+
+function loadCfg() {
+  try { return JSON.parse(localStorage.getItem(LS) || "{}"); } catch { return {}; }
+}
+function saveCfg() {
+  localStorage.setItem(LS, JSON.stringify({ project: $("project").value, apikey: $("apikey").value }));
+}
+
+(function initCfg() {
+  const cfg = loadCfg();
+  $("project").value = cfg.project || "";
+  $("apikey").value = cfg.apikey || "";
+  $("project").addEventListener("input", saveCfg);
+  $("apikey").addEventListener("input", saveCfg);
+})();
+
+let currentFile = null;
+function setFile(f) {
+  currentFile = f || null;
+  $("result-card").hidden = true;
+  $("error-card").hidden = true;
+  $("label-msg").textContent = "";
+  if (!f) { $("preview").hidden = true; return; }
+  $("img").src = URL.createObjectURL(f);
+  $("drop").textContent = `${f.name} (${Math.round(f.size / 1024)} KB)`;
+  $("preview").hidden = false;
+  updateReady();
+}
+function updateReady() {
+  const ready = $("project").value && $("apikey").value;
+  $("ready-warn").hidden = !!ready;
+  $("predict").disabled = !ready;
+  $("label-left").disabled = !ready;
+  $("label-right").disabled = !ready;
+}
+$("project").addEventListener("input", updateReady);
+$("apikey").addEventListener("input", updateReady);
+
+$("drop").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", (e) => setFile(e.target.files[0]));
+["dragover", "dragenter"].forEach(ev =>
+  $("drop").addEventListener(ev, (e) => { e.preventDefault(); $("drop").classList.add("over"); })
+);
+["dragleave", "drop"].forEach(ev =>
+  $("drop").addEventListener(ev, (e) => { e.preventDefault(); $("drop").classList.remove("over"); })
+);
+$("drop").addEventListener("drop", (e) => {
+  const f = e.dataTransfer.files?.[0];
+  if (f) setFile(f);
+});
+$("clear").addEventListener("click", () => { setFile(null); $("drop").textContent = "ここに画像をドロップ、またはクリックして選択"; });
+
+async function call(path, extra) {
+  if (!currentFile) return;
+  const fd = new FormData();
+  fd.append("file", currentFile);
+  if (extra) for (const [k, v] of Object.entries(extra)) fd.append(k, v);
+  const project = $("project").value;
+  const res = await fetch(`/v1/${encodeURIComponent(project)}${path}`, {
+    method: "POST",
+    headers: { "X-API-Key": $("apikey").value },
+    body: fd,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const code = json?.error?.code ?? "unknown";
+    const msg = json?.error?.message ?? res.statusText;
+    throw new Error(`[${res.status} ${code}] ${msg}`);
+  }
+  return json;
+}
+
+function showError(e) {
+  $("error").textContent = e.message || String(e);
+  $("error-card").hidden = false;
+}
+
+$("predict").addEventListener("click", async () => {
+  $("error-card").hidden = true;
+  try {
+    const r = await call("/predict");
+    $("facing").textContent = r.facing.toUpperCase();
+    $("facing").className = "facing " + r.facing;
+    $("meta").textContent = `confidence: ${(r.confidence * 100).toFixed(1)}% / model: ${r.model} / k=${r.k}`;
+    $("bar-fill").style.width = `${r.confidence * 100}%`;
+    $("uncertain").hidden = !r.uncertain;
+    $("neighbors").textContent = JSON.stringify(r.neighbors ?? [], null, 2);
+    $("result-card").hidden = false;
+  } catch (e) { showError(e); }
+});
+
+async function doLabel(facing) {
+  $("error-card").hidden = true;
+  try {
+    const r = await call("/label", { facing, source: "human" });
+    $("label-msg").textContent =
+      `登録: facing=${r.facing} / sample_id=${r.sample_id} / project_size=${r.project_size}` +
+      (r.deduped ? " (既存を更新)" : "") +
+      (r.flip_added ? " / flip 追加" : "");
+  } catch (e) { showError(e); }
+}
+$("label-left").addEventListener("click", () => doLabel("left"));
+$("label-right").addEventListener("click", () => doLabel("right"));
+
+updateReady();
+</script>
+</body>
+</html>
