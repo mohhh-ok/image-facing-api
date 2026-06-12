@@ -43,22 +43,22 @@
         <a href="/admin?project={{ p.name }}{% if show_flip %}&show_flip=true{% endif %}"
            class="{% if p.name == selected %}active{% endif %}">{{ p.name }}</a>
         <form class="inline-key" method="post" action="/v1/projects/{{ p.name }}/rotate_key"
-              onsubmit="return confirm('{{ p.name }} の API キーを再発行します。旧キーは即無効になり、利用中のクライアントは差し替えるまで停止します。続けますか？');">
-          <button type="submit" title="API キー再発行（新キーは応答に1度だけ表示）">🔑</button>
+              onsubmit="return confirm('Rotate the API key for {{ p.name }}? The old key is revoked immediately and clients using it will fail until they are updated.');">
+          <button type="submit" title="Rotate API key (the new plaintext value is shown only in the response)">🔑</button>
         </form>
       </span>
     {% else %}
-      <em>（project がまだありません）</em>
+      <em>(no projects yet)</em>
     {% endfor %}
   </div>
 
   <form id="create-project" class="create" autocomplete="off">
-    <label for="new-project-name">新しい project:</label>
+    <label for="new-project-name">Create a new project:</label>
     <input id="new-project-name" name="name" placeholder="my-project"
            required pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,63}"
-           title="英数 + _ - 、64 文字以内">
-    <input id="new-project-desc" name="description" placeholder="説明（任意）">
-    <button type="submit">作成 + API キー発行</button>
+           title="alphanumerics + _ - , up to 64 chars">
+    <input id="new-project-desc" name="description" placeholder="description (optional)">
+    <button type="submit">Create + issue API key</button>
     <span id="create-msg" style="font-size:.8rem;opacity:.7"></span>
   </form>
   <div id="create-key" class="created-key" hidden></div>
@@ -66,9 +66,9 @@
   {% if selected %}
     <p>
       <a href="/admin?project={{ selected }}{% if not show_flip %}&show_flip=true{% endif %}">
-        {% if show_flip %}flip 拡張を隠す{% else %}flip 拡張も表示{% endif %}
+        {% if show_flip %}hide flip augmentations{% else %}also show flip augmentations{% endif %}
       </a>
-      ・ {{ samples|length }} 件
+      · {{ samples|length }} samples
     </p>
 
     <div class="grid">
@@ -89,20 +89,20 @@
           </div>
           {% if not s.is_flip_aug %}
             <form class="del-form" method="post" action="/admin/delete"
-                  onsubmit="return confirm('#{{ s.id }} とその flip 拡張を削除します。元に戻せません。よろしいですか？');">
+                  onsubmit="return confirm('Delete #{{ s.id }} and its flip augmentation? This cannot be undone.');">
               <input type="hidden" name="project" value="{{ selected }}">
               <input type="hidden" name="sample_id" value="{{ s.id }}">
               <input type="hidden" name="show_flip" value="{{ 'true' if show_flip else 'false' }}">
-              <button type="submit" class="del">削除</button>
+              <button type="submit" class="del">Delete</button>
             </form>
           {% endif %}
         </div>
       {% else %}
-        <p>サンプルがありません。</p>
+        <p>No samples yet.</p>
       {% endfor %}
     </div>
   {% else %}
-    <p>project を選んでください。</p>
+    <p>Select a project.</p>
   {% endif %}
 
 <script>
@@ -114,7 +114,7 @@ document.getElementById("create-project").addEventListener("submit", async (e) =
   const description = document.getElementById("new-project-desc").value.trim();
   const msg = document.getElementById("create-msg");
   const keyBox = document.getElementById("create-key");
-  msg.textContent = "作成中…";
+  msg.textContent = "Creating…";
   keyBox.hidden = true;
   try {
     const res = await fetch("/v1/projects", {
@@ -125,23 +125,23 @@ document.getElementById("create-project").addEventListener("submit", async (e) =
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      msg.textContent = `エラー: ${json?.error?.message ?? res.statusText}`;
+      msg.textContent = `Error: ${json?.error?.message ?? res.statusText}`;
       return;
     }
-    msg.textContent = `作成しました: ${json.project}`;
+    msg.textContent = `Created: ${json.project}`;
     keyBox.innerHTML =
-      `<div><strong>${json.project}</strong> の API キー (この画面でしか平文は表示されません):</div>` +
+      `<div>API key for <strong>${json.project}</strong> (shown in plaintext only here, only this once):</div>` +
       `<div style="margin-top:.3rem"><code>${json.api_key}</code></div>` +
-      `<div style="margin-top:.3rem">この値を <a href="/playground">/playground</a> の「API key」欄に貼り付けて使ってください。</div>`;
+      `<div style="margin-top:.3rem">Paste this into the "API key" field on <a href="/playground">/playground</a>.</div>`;
     keyBox.hidden = false;
     // 一覧を更新するためリロード（key 表示は失われるので、必ずコピーしてから）
     setTimeout(() => {
-      if (confirm("project 一覧をリロードしますか？（API キーの平文表示はここで消えます。コピー済みならOK）")) {
+      if (confirm("Reload the project list? The plaintext API key shown above will disappear — only proceed if you have copied it.")) {
         location.reload();
       }
     }, 500);
   } catch (err) {
-    msg.textContent = `通信エラー: ${err.message}`;
+    msg.textContent = `Network error: ${err.message}`;
   }
 });
 </script>

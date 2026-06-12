@@ -41,9 +41,9 @@
   <p class="muted">
     <strong>First time?</strong> Open <a href="/admin">/admin</a> (Basic auth:
     the <code>ADMIN_USER</code> / <code>ADMIN_PASS</code> from your <code>.env</code>),
-    use the "新しい project" form to create a project, and copy the API key it
-    shows — the plaintext is only shown once. Paste the project name and key
-    into the fields below.
+    use the <em>"Create a new project"</em> form to create one, and copy the
+    API key it shows — the plaintext is only displayed once. Then paste the
+    project name and the key into the fields below.
   </p>
 
   <div class="card">
@@ -191,7 +191,7 @@ function showError(e) {
   hint.className = "muted";
   hint.style.marginTop = ".4rem";
   if (e.code === "no_such_project") {
-    hint.innerHTML = 'Create a project first at <a href="/admin">/admin</a> (the form labelled "新しい project").';
+    hint.innerHTML = 'Create a project first at <a href="/admin">/admin</a> (use the "Create a new project" form).';
   } else if (e.status === 401 || e.status === 403) {
     hint.innerHTML = 'API key is missing or does not match this project. Issue or rotate one at <a href="/admin">/admin</a>.';
   } else if (e.status === 503) {
