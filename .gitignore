@@ -16,7 +16,7 @@ venv/
 
 # モデル（大きい）。git では無視（誤コミット防止）。
 # 本番へは Dockerfile がビルド時に配信用 public repo の Release から取得する
-# （github.com/mohhh-ok/ai-facing-api-models）。railway up には乗せない。
+# （github.com/mohhh-ok/image-facing-api）。railway up には乗せない。
 models/*.onnx
 
 # OS / エディタ
