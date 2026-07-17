@@ -15,7 +15,7 @@ Common to all endpoints:
 
 ## POST /v1/{project}/predict
 
-Predict the facing of an image. **Not added to the training set** (this is not a label).
+Predict the **full annotation** of an image (facing + zoom_up). **Not added to the training set** (this is not a label).
 
 Request (JSON example):
 ```json
@@ -27,50 +27,64 @@ Response:
 ```json
 {
   "facing": "left",
+  "zoom_up": true,
   "confidence": 0.86,
   "uncertain": false,
   "neighbors": [
-    { "sample_id": 1421, "facing": "left", "similarity": 0.94 },
-    { "sample_id": 0987, "facing": "left", "similarity": 0.91 }
+    { "sample_id": 1421, "facing": "left", "zoom_up": true, "similarity": 0.94 },
+    { "sample_id": 987, "facing": "left", "zoom_up": true, "similarity": 0.91 }
   ],
-  "model": "dinov2_vits14",
+  "model": "dinov2_vitb14",
   "k": 9
 }
 ```
 
 - `facing`: `"left" | "right"`.
-- `confidence`: 0..1. Computed from neighbor vote share and distance (see [model.md](model.md)).
-- `uncertain`: true when below threshold (split vote / distant neighbors / too few labels yet).
-  Clients can use this to route to a **fallback (e.g. LLM judgement) or to admin**.
-- `neighbors`: for debugging and admin display (can be omitted with `include_neighbors=false`).
+- `zoom_up`: boolean. “show this subject a bit larger” (client applies a fixed factor, e.g. ×1.2).
+  Reason may be wings, horns, tall hair, etc. — not stored. Majority vote over the same neighbors as facing.
+- `confidence`: 0..1. From **facing** vote margin × nearness (see [model.md](model.md)).
+- `uncertain`: true when below threshold.
+- `neighbors`: optional (`include_neighbors=false` to omit).
 
-`facing` is always returned even when `uncertain=true` (clients need a binary answer).
+When there are no labels yet: `facing=left`, `zoom_up=false`, `uncertain=true`.
 
 ---
 
 ## POST /v1/{project}/label
 
-Register a ground-truth label. It is added to the training set and **takes effect immediately** for subsequent predicts.
+Register a ground-truth **full annotation**. Immediate effect on subsequent predicts.
+
+One label = one vector + `{facing, zoom_up}` (single label space).
 
 Request (JSON example):
 ```json
 {
   "image_base64": "iVBORw0KGgo...",
   "facing": "right",
-  "external_id": "yokai-51",     // optional. Client-side identifier (stored in DB only; not used for matching)
-  "source": "human"               // optional. "human" | "import" | "model", etc. Default "human"
+  "zoom_up": true,
+  "external_id": "yokai-51",
+  "source": "human"
 }
 ```
 
+- `facing` (required): `"left" | "right"`.
+- `zoom_up` (optional, default `false`).
+- `external_id` / `source`: optional.
+
 Response:
 ```json
-{ "sample_id": 1422, "facing": "right", "deduped": false, "flip_added": true, "project_size": 318 }
+{
+  "sample_id": 1422,
+  "facing": "right",
+  "zoom_up": true,
+  "deduped": false,
+  "flip_added": true,
+  "project_size": 318
+}
 ```
 
-- If the same image (sha256 match) already exists, **its facing is updated** (`deduped: true`).
-- `flip_added`: whether a horizontally flipped variant was added with the inverse label (added by default; see [model.md](model.md)).
-- `project_size`: current label count, including flip augmentation.
-- `source="human"` is the highest-priority label from admin/manual input. `model`-sourced labels may be treated with lower trust.
+- Same image (sha256): full annotation updated (`deduped: true`).
+- Flip row: **facing inverted**, `zoom_up` copied.
 
 ---
 

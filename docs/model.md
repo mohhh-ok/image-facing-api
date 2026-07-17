@@ -3,10 +3,16 @@
 ## Overview
 
 ```
-image ──[preprocess]──▶ DINOv2 ViT-S/14 (ONNX) ──▶ 384-dim vector ──[L2 normalize]──┐
+image ──[preprocess]──▶ DINOv2 ViT-B/14 (ONNX) ──▶ 768-dim vector ──[L2 normalize]──┐
                                                                                     ▼
-                              project's labeled vector set ──[cosine k-NN]──▶ majority vote ──▶ {facing, confidence}
+                              project's labeled vector set ──[cosine k-NN]──▶
+                                facing: majority vote
+                                zoom_up: majority vote (bool)
+                              ──▶ {facing, zoom_up, confidence}
 ```
+
+One sample = one vector + **full annotation** `{facing, zoom_up}` (unified label space).
+`zoom_up` means “display a bit larger”; the client owns the actual factor (e.g. ×1.2).
 
 Training is just "append a labeled vector to the set." **No gradient descent, no retraining step.** This is what makes "keep the server up and let it predict and learn continuously" actually work.
 
@@ -20,18 +26,17 @@ Training is just "append a labeled vector to the set." **No gradient descent, no
 
 k-NN is the only one that satisfies small data, CPU, and instant updates simultaneously. If the dataset grows to tens of thousands of samples and k-NN becomes too coarse, there is room to migrate to logistic regression or approximate nearest neighbor.
 
-## Embedding model: DINOv2 ViT-S/14
+## Embedding model: DINOv2 ViT-B/14
 
-- Self-supervised general-purpose visual features. **Strong linear-probe / k-NN-probe performance**, i.e. it works well with few labels. It tends to preserve facing differences in its features across domains like illustration, character art, and photos.
-- ViT-S/14 is small (about 21M params) and **CPU inference fits within a few hundred ms per image**.
-- Output is 384 dimensions (the CLS token). We L2-normalize it and use cosine similarity.
-- Converted to ONNX and run on onnxruntime (CPU). The production runtime does not include `torch` (conversion is done once via `scripts/export_dinov2_onnx.py` at build time or ahead of time).
+- Self-supervised general-purpose visual features. **Strong linear-probe / k-NN-probe performance**, i.e. it works well with few labels. It tends to preserve facing and coarse head-layout differences across illustration / character art.
+- ViT-B/14 (~86M params). **CPU embed is typically ~150ms/image** on Apple Silicon (see `scripts/bench_embed.py`); about 3× ViT-S.
+- Output is **768** dimensions (the CLS token). We L2-normalize it and use cosine similarity.
+- Converted to ONNX and run on onnxruntime (CPU). The production runtime does not include `torch` (conversion is done once via `scripts/export_dinov2_onnx.py --model dinov2_vitb14`).
 
-Alternative candidates (design to be swappable if needed):
-- **CLIP ViT-B/32**: a text-aligned model but its visual features are general-purpose. Slightly larger.
-- DINOv2 ViT-B/14: higher accuracy, lower speed. An option once data grows.
+Alternative / previous:
+- DINOv2 ViT-S/14 (384-dim): faster; kept as export option for speed experiments. Old S-only DBs should be **wiped** when switching to B (dim mismatch rows are skipped at warmup).
 
-`embed.py` confines the interface to "image → 384-dim np.ndarray" so swapping models does not ripple into the DB or classifier. The `model_name` and `dim` of the embedding are recorded in the DB so we can detect when **re-embedding is required** after a model change.
+`embed.py` confines the interface to "image → L2-normalized vector" (dim auto-detected from ONNX). The `model_name` and `dim` of the embedding are recorded in the DB.
 
 ## Preprocessing (must be strictly fixed)
 

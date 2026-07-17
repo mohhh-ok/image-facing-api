@@ -1,8 +1,4 @@
-"""project ごとの埋め込みインデックスをメモリに保持する（docs/architecture.md）。
-
-DB が source of truth。起動時に DB から復元し、label 時に DB とメモリの両方へ書く。
-プロセス再起動で DB から再構築できるので、メモリは純粋なキャッシュ。
-"""
+"""project ごとの埋め込みインデックス。各 sample は facing + zoom_up。"""
 
 from __future__ import annotations
 
@@ -11,18 +7,17 @@ import threading
 import numpy as np
 
 from .db import Database
+from .params import DEFAULT_ZOOM_UP
 
 
 class ProjectIndex:
-    """1 project 分の埋め込み行列とサンプルメタ。"""
-
     def __init__(self, dim: int) -> None:
         self.dim = dim
-        # (N, dim) float32, 各行 L2 正規化済み
         self.vectors = np.empty((0, dim), dtype=np.float32)
         self.sample_ids: list[int] = []
-        self.facings: list[str] = []          # 'left' | 'right'
-        self.is_flip: list[int] = []          # 0 | 1
+        self.facings: list[str] = []
+        self.zoom_ups: list[bool] = []
+        self.is_flip: list[int] = []
         self.origin_ids: list[int | None] = []
 
     @property
@@ -34,6 +29,7 @@ class ProjectIndex:
         sample_id: int,
         vector: np.ndarray,
         facing: str,
+        zoom_up: bool,
         is_flip_aug: int,
         origin_sample_id: int | None,
     ) -> None:
@@ -41,15 +37,17 @@ class ProjectIndex:
         self.vectors = np.vstack([self.vectors, v]) if self.size else v.copy()
         self.sample_ids.append(sample_id)
         self.facings.append(facing)
+        self.zoom_ups.append(bool(zoom_up))
         self.is_flip.append(is_flip_aug)
         self.origin_ids.append(origin_sample_id)
 
-    def update_facing(self, sample_id: int, facing: str) -> None:
+    def update_label(self, sample_id: int, facing: str, zoom_up: bool) -> None:
         try:
             idx = self.sample_ids.index(sample_id)
         except ValueError:
             return
         self.facings[idx] = facing
+        self.zoom_ups[idx] = bool(zoom_up)
 
     def remove(self, sample_id: int) -> bool:
         try:
@@ -59,21 +57,19 @@ class ProjectIndex:
         self.vectors = np.delete(self.vectors, idx, axis=0)
         del self.sample_ids[idx]
         del self.facings[idx]
+        del self.zoom_ups[idx]
         del self.is_flip[idx]
         del self.origin_ids[idx]
         return True
 
 
 class Store:
-    """全 project のインデックスを束ねる。スレッドセーフ。"""
-
     def __init__(self, dim: int) -> None:
         self.dim = dim
         self._lock = threading.RLock()
         self._indexes: dict[str, ProjectIndex] = {}
 
     def warmup(self, db: Database) -> None:
-        """DB の embeddings を全 project 分メモリへ載せる。"""
         with self._lock:
             self._indexes.clear()
             for project in db.distinct_projects_with_samples():
@@ -81,12 +77,17 @@ class Store:
                 for row in db.iter_embeddings_for_project(project):
                     vec = np.frombuffer(row["vector"], dtype=np.float32)
                     if vec.shape[0] != self.dim:
-                        # モデル/前処理が変わった可能性。ここでは黙って飛ばす（再埋め込み対象）。
                         continue
+                    keys = row.keys()
+                    if "zoom_up" in keys:
+                        zoom_up = bool(int(row["zoom_up"]))
+                    else:
+                        zoom_up = DEFAULT_ZOOM_UP
                     index.add(
                         row["sample_id"],
                         vec,
                         row["facing"],
+                        zoom_up,
                         int(row["is_flip_aug"]),
                         row["origin_sample_id"],
                     )
@@ -106,15 +107,18 @@ class Store:
         sample_id: int,
         vector: np.ndarray,
         facing: str,
+        zoom_up: bool,
         is_flip_aug: int,
         origin_sample_id: int | None,
     ) -> None:
         with self._lock:
-            self.get(project).add(sample_id, vector, facing, is_flip_aug, origin_sample_id)
+            self.get(project).add(
+                sample_id, vector, facing, zoom_up, is_flip_aug, origin_sample_id
+            )
 
-    def update_facing(self, project: str, sample_id: int, facing: str) -> None:
+    def update_label(self, project: str, sample_id: int, facing: str, zoom_up: bool) -> None:
         with self._lock:
-            self.get(project).update_facing(sample_id, facing)
+            self.get(project).update_label(sample_id, facing, zoom_up)
 
     def remove(self, project: str, sample_id: int) -> None:
         with self._lock:

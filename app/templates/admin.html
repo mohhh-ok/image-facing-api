@@ -114,12 +114,32 @@
               <strong class="tag-right">right</strong>
               <span class="mirrored">(image mirrored for display)</span>
             {% endif %}
+            {% set zu = s.zoom_up if s.zoom_up is defined else 0 %}
+            <span class="mirrored">{% if zu %}zoom_up{% else %}normal{% endif %}</span>
           </div>
+          {% if not s.is_flip_aug %}
+          <form class="params-form" method="post" action="/admin/correct"
+                style="margin-top:.35rem;font-size:.72rem;text-align:left">
+            <input type="hidden" name="project" value="{{ selected }}">
+            <input type="hidden" name="sample_id" value="{{ s.id }}">
+            <input type="hidden" name="show_flip" value="{{ 'true' if show_flip else 'false' }}">
+            <input type="hidden" name="facing" value="{{ s.facing }}">
+            <label>
+              <input type="checkbox" name="zoom_up" value="true" {% if zu %}checked{% endif %}>
+              zoom_up
+            </label>
+            {# unchecked checkbox は送られないので、常に false を hidden で先に送る → checked なら true が後勝ちにならないので JS なしでは片方向。
+               代わりに: 未チェック時は zoom_up フィールド無し → parse が default false。
+               チェック時だけ zoom_up=true が付く。hidden は付けない。 #}
+            <button type="submit">Save</button>
+          </form>
+          {% endif %}
           <form class="flip-form" method="post" action="/admin/correct">
             <input type="hidden" name="project" value="{{ selected }}">
             <input type="hidden" name="sample_id" value="{{ s.id }}">
             <input type="hidden" name="show_flip" value="{{ 'true' if show_flip else 'false' }}">
             <input type="hidden" name="facing" value="{{ 'right' if s.facing == 'left' else 'left' }}">
+            <input type="hidden" name="zoom_up" value="{{ 'true' if zu else 'false' }}">
             <button type="submit">Flip label → {{ 'right' if s.facing == 'left' else 'left' }}</button>
           </form>
           <div class="meta">

@@ -1,6 +1,7 @@
 """DINOv2 埋め込み（docs/model.md）。
 
-「画像 → 384 次元 L2 正規化ベクトル」のインターフェースにモデルを閉じ込める。
+「画像 → L2 正規化ベクトル」のインターフェースにモデルを閉じ込める。
+次元は ONNX 出力から自動検出する（ViT-S=384 / ViT-B=768）。
 前処理はここ1箇所に固定する（predict と label で食い違うと精度が崩れるため）。
 
 - `onnxruntime` はこのモジュールのトップでは import しない（遅延 import）。
@@ -69,21 +70,40 @@ def l2_normalize(vec: np.ndarray) -> np.ndarray:
     return (vec / norm).astype(np.float32)
 
 
+def _infer_output_dim(session) -> int:
+    """ONNX 出力 shape の末尾次元を読む。dynamic で取れない場合は dummy 推論する。"""
+    shape = session.get_outputs()[0].shape
+    last = shape[-1] if shape else None
+    if isinstance(last, int) and last > 0:
+        return last
+    # shape が ['batch', 'dim'] 等で静的に取れない場合
+    inp = session.get_inputs()[0]
+    # DINOv2 前処理済み想定: (1, 3, 224, 224)
+    dummy = np.zeros((1, 3, 224, 224), dtype=np.float32)
+    out = session.run(None, {inp.name: dummy})[0]
+    return int(np.asarray(out).reshape(-1).shape[0])
+
+
 class Dinov2OnnxEmbedder:
     """onnxruntime（CPU）で DINOv2 ONNX を推論する本番実装。"""
 
-    def __init__(self, model_path: Path, model_name: str, dim: int = 384) -> None:
+    def __init__(
+        self,
+        model_path: Path,
+        model_name: str,
+        dim: int | None = None,
+    ) -> None:
         import onnxruntime as ort  # 遅延 import
 
         if not Path(model_path).exists():
             raise FileNotFoundError(f"埋め込みモデルが見つかりません: {model_path}")
 
         self.model_name = model_name
-        self.dim = dim
         self._session = ort.InferenceSession(
             str(model_path), providers=["CPUExecutionProvider"]
         )
         self._input_name = self._session.get_inputs()[0].name
+        self.dim = dim if dim is not None else _infer_output_dim(self._session)
 
     def embed(self, image: Image.Image) -> np.ndarray:
         tensor = preprocess(image)

@@ -1,7 +1,4 @@
-"""label / predict のコアパイプライン。
-
-routes と admin の手修正がここを共有する（修正は label と同じ経路を通る・docs/admin.md）。
-"""
+"""label / predict。フル注釈: facing + zoom_up。"""
 
 from __future__ import annotations
 
@@ -15,6 +12,7 @@ from .db import Database
 from .embed import Embedder
 from .errors import bad_request, model_not_loaded
 from .images import decode_image, horizontal_flip, save_original, sha256_hex
+from .params import DEFAULT_ZOOM_UP
 from .store import Store
 
 VALID_SOURCES = {"human", "import", "model"}
@@ -28,6 +26,7 @@ def opposite(facing: str) -> str:
 class LabelResult:
     sample_id: int
     facing: str
+    zoom_up: bool
     deduped: bool
     flip_added: bool
     project_size: int
@@ -36,6 +35,7 @@ class LabelResult:
 @dataclass
 class PredictResult:
     facing: str
+    zoom_up: bool
     confidence: float
     uncertain: bool
     neighbors: list[classifier.Neighbor]
@@ -55,7 +55,7 @@ class FacingService:
             raise model_not_loaded()
         return self.embedder
 
-    def _embed_bytes(self, data: bytes) -> tuple[Image.Image, "object"]:
+    def _embed_bytes(self, data: bytes) -> tuple[Image.Image, object]:
         embedder = self._require_embedder()
         img = decode_image(data, self.settings.max_image_bytes)
         return img, embedder.embed(img)
@@ -64,7 +64,10 @@ class FacingService:
         k = project_row["k"] if project_row is not None else None
         return int(k) if k else self.settings.knn_k
 
-    # --- predict ---------------------------------------------------------
+    def _normalize_params(self, facing: str, zoom_up: bool) -> tuple[str, bool]:
+        if facing not in ("left", "right"):
+            raise bad_request("facing は 'left' か 'right' を指定してください")
+        return facing, bool(zoom_up)
 
     def predict(self, project: str, data: bytes, project_row) -> PredictResult:
         embedder = self._require_embedder()
@@ -74,6 +77,7 @@ class FacingService:
         pred = classifier.predict(index, vector, k, self.settings.uncertain_threshold)
         return PredictResult(
             facing=pred.facing,
+            zoom_up=pred.zoom_up,
             confidence=pred.confidence,
             uncertain=pred.uncertain,
             neighbors=pred.neighbors,
@@ -81,20 +85,18 @@ class FacingService:
             k=k,
         )
 
-    # --- label -----------------------------------------------------------
-
     def add_label(
         self,
         project: str,
         data: bytes,
         facing: str,
         *,
+        zoom_up: bool = DEFAULT_ZOOM_UP,
         source: str = "human",
         external_id: str | None = None,
         flip_aug: bool = True,
     ) -> LabelResult:
-        if facing not in ("left", "right"):
-            raise bad_request("facing は 'left' か 'right' を指定してください")
+        facing, zoom_up = self._normalize_params(facing, zoom_up)
         if source not in VALID_SOURCES:
             raise bad_request(f"source は {sorted(VALID_SOURCES)} のいずれかです")
 
@@ -104,14 +106,20 @@ class FacingService:
 
         existing = self.db.find_sample_by_sha(project, sha, is_flip_aug=0)
         if existing is not None:
-            return self._update_existing(project, existing, facing, source)
+            return self._update_existing(project, existing, facing, zoom_up, source)
 
-        # 新規: 元画像を保存 → 埋め込み → DB/メモリへ
         save_original(self.settings.images_dir, data, sha)
         vector = embedder.embed(img)
         sample_id = self._insert(
-            project, sha, facing, source, is_flip_aug=0, origin_sample_id=None,
-            external_id=external_id, vector=vector,
+            project,
+            sha,
+            facing,
+            zoom_up,
+            source,
+            is_flip_aug=0,
+            origin_sample_id=None,
+            external_id=external_id,
+            vector=vector,
         )
 
         flip_added = False
@@ -119,26 +127,45 @@ class FacingService:
             flipped = horizontal_flip(img)
             flip_vec = embedder.embed(flipped)
             self._insert(
-                project, sha, opposite(facing), source, is_flip_aug=1,
-                origin_sample_id=sample_id, external_id=external_id, vector=flip_vec,
+                project,
+                sha,
+                opposite(facing),
+                zoom_up,  # flip でも zoom_up はそのまま
+                source,
+                is_flip_aug=1,
+                origin_sample_id=sample_id,
+                external_id=external_id,
+                vector=flip_vec,
             )
             flip_added = True
 
         return LabelResult(
             sample_id=sample_id,
             facing=facing,
+            zoom_up=zoom_up,
             deduped=False,
             flip_added=flip_added,
             project_size=self.db.count_samples(project, include_flip=True),
         )
 
     def _insert(
-        self, project, sha, facing, source, *, is_flip_aug, origin_sample_id, external_id, vector
+        self,
+        project,
+        sha,
+        facing,
+        zoom_up,
+        source,
+        *,
+        is_flip_aug,
+        origin_sample_id,
+        external_id,
+        vector,
     ) -> int:
         sample_id = self.db.insert_sample(
             project=project,
             image_sha256=sha,
             facing=facing,
+            zoom_up=zoom_up,
             source=source,
             is_flip_aug=is_flip_aug,
             origin_sample_id=origin_sample_id,
@@ -146,53 +173,57 @@ class FacingService:
         )
         vec_bytes = vector.astype("float32").tobytes()
         self.db.insert_embedding(
-            sample_id, self.embedder.model_name, self.settings.embed_version, vector.shape[0], vec_bytes
+            sample_id,
+            self.embedder.model_name,
+            self.settings.embed_version,
+            vector.shape[0],
+            vec_bytes,
         )
-        self.store.add(project, sample_id, vector, facing, is_flip_aug, origin_sample_id)
+        self.store.add(
+            project, sample_id, vector, facing, zoom_up, is_flip_aug, origin_sample_id
+        )
         return sample_id
 
-    def _update_existing(self, project, existing, facing, source) -> LabelResult:
-        """同一画像が既にある場合は facing を更新し、flip 拡張行も逆向きに追従させる。"""
+    def _update_existing(self, project, existing, facing, zoom_up, source) -> LabelResult:
         sample_id = int(existing["id"])
-        self.db.update_sample_facing(sample_id, facing, source)
-        self.store.update_facing(project, sample_id, facing)
+        self.db.update_sample_label(sample_id, facing, zoom_up, source)
+        self.store.update_label(project, sample_id, facing, zoom_up)
 
         flip_added = False
         child = self.db.get_flip_child(sample_id)
         if child is not None:
-            self.db.update_sample_facing(int(child["id"]), opposite(facing), source)
-            self.store.update_facing(project, int(child["id"]), opposite(facing))
+            self.db.update_sample_label(int(child["id"]), opposite(facing), zoom_up, source)
+            self.store.update_label(project, int(child["id"]), opposite(facing), zoom_up)
             flip_added = True
 
         return LabelResult(
             sample_id=sample_id,
             facing=facing,
+            zoom_up=zoom_up,
             deduped=True,
             flip_added=flip_added,
             project_size=self.db.count_samples(project, include_flip=True),
         )
 
-    # --- admin の手修正（label と同じ経路）-------------------------------
-
-    def correct_facing(self, project: str, sample_id: int, facing: str) -> None:
-        if facing not in ("left", "right"):
-            raise bad_request("facing は 'left' か 'right' を指定してください")
+    def correct_label(
+        self,
+        project: str,
+        sample_id: int,
+        facing: str,
+        zoom_up: bool,
+    ) -> None:
+        facing, zoom_up = self._normalize_params(facing, zoom_up)
         row = self.db.get_sample(sample_id)
         if row is None or row["project"] != project or int(row["is_flip_aug"]) == 1:
             raise bad_request("修正対象のサンプルが見つかりません")
-        self.db.update_sample_facing(sample_id, facing, "human")
-        self.store.update_facing(project, sample_id, facing)
+        self.db.update_sample_label(sample_id, facing, zoom_up, "human")
+        self.store.update_label(project, sample_id, facing, zoom_up)
         child = self.db.get_flip_child(sample_id)
         if child is not None:
-            self.db.update_sample_facing(int(child["id"]), opposite(facing), "human")
-            self.store.update_facing(project, int(child["id"]), opposite(facing))
+            self.db.update_sample_label(int(child["id"]), opposite(facing), zoom_up, "human")
+            self.store.update_label(project, int(child["id"]), opposite(facing), zoom_up)
 
     def delete_label(self, project: str, sample_id: int) -> int:
-        """原本ラベルとその flip 拡張行を DB / index の両方から削除する。
-
-        対象は原本（is_flip_aug=0）のみ指定可。削除した行数（原本+flip子）を返す。
-        画像ファイルは sha 単位で他サンプルと共有しうるため、ここでは消さない。
-        """
         row = self.db.get_sample(sample_id)
         if row is None or row["project"] != project or int(row["is_flip_aug"]) == 1:
             raise bad_request("削除対象のサンプルが見つかりません（原本ラベルのみ指定可）")

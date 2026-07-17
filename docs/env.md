@@ -6,9 +6,9 @@ Loaded by `app/config.py`. `.env` is not committed (in production, use Railway e
 |---|---|---|
 | `PORT` | 8000 | Listen port (injected by Railway) |
 | `DATA_DIR` | `./data` | Location for SQLite, images, and cache. In production this is `/data` (volume) |
-| `MODEL_PATH` | `models/dinov2_vits14.onnx` | Path to the embedding ONNX. Startup fails explicitly if missing |
-| `MODEL_NAME` | `dinov2_vits14` | Embedding model name recorded in the DB (used to decide re-embedding) |
-| `EMBED_VERSION` | 1 | Embedding version, including preprocessing. Bumping it triggers re-embedding |
+| `MODEL_PATH` | `models/dinov2_vitb14.onnx` | Path to the embedding ONNX (ViT-B/14, 768-dim). Startup fails explicitly if missing |
+| `MODEL_NAME` | `dinov2_vitb14` | Embedding model name recorded in the DB (used to decide re-embedding) |
+| `EMBED_VERSION` | 2 | Embedding version, including preprocessing. Bumping it triggers re-embedding |
 | `KNN_K` | 9 | Default k for k-NN (overridable per project) |
 | `UNCERTAIN_THRESHOLD` | 0.55 | Confidence below this marks the result `uncertain=true` |
 | `MAX_IMAGE_BYTES` | 10485760 | Maximum accepted image size (10MB). Over the limit returns 413 |

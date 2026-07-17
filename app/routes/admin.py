@@ -1,8 +1,4 @@
-"""admin UI（Basic 認証・docs/admin.md）。
-
-project を選び、サンプルの向きをワンクリックで修正する。修正は service.correct_facing を
-通り、label と同じ経路で即インデックス反映される。flip 拡張行は既定で隠す。
-"""
+"""admin UI。facing / zoom_up の手修正。"""
 
 from __future__ import annotations
 
@@ -16,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from ..auth import require_admin, verify_same_origin
 from ..deps import get_service
 from ..errors import bad_request
+from ..params import parse_zoom_up
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
 
@@ -55,10 +52,15 @@ def admin_correct(
     project: str = Form(...),
     sample_id: int = Form(...),
     facing: str = Form(...),
+    zoom_up: str = Form("false"),
     show_flip: bool = Form(False),
 ):
+    try:
+        zoom_up_b = parse_zoom_up(zoom_up)
+    except ValueError as e:
+        raise bad_request(str(e)) from e
     svc = get_service(request)
-    svc.correct_facing(project, sample_id, facing)
+    svc.correct_label(project, sample_id, facing, zoom_up_b)
     url = f"/admin?project={project}"
     if show_flip:
         url += "&show_flip=true"
@@ -72,7 +74,6 @@ def admin_delete(
     sample_id: int = Form(...),
     show_flip: bool = Form(False),
 ):
-    """原本ラベルとその flip 拡張行を削除し、admin 画面に戻る（admin 認証）。"""
     svc = get_service(request)
     svc.delete_label(project, sample_id)
     url = f"/admin?project={project}"

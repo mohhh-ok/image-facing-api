@@ -5,7 +5,7 @@ this document covers how to actually hit it in practice.
 
 ## In one line
 
-Send an image, get back `facing` (`"left"` or `"right"`). Accuracy improves the more labels you add (see [model.md](model.md)).
+Send an image, get back `facing` (`"left"` or `"right"`) and `zoom_up` (boolean, default `false`). Accuracy improves the more labels you add (see [model.md](model.md)).
 No LLM calls, no external side effects — a pure image-to-label function.
 
 ---

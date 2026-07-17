@@ -15,11 +15,13 @@ PROJECT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 class NeighborOut(BaseModel):
     sample_id: int
     facing: Facing
+    zoom_up: bool
     similarity: float
 
 
 class PredictResponse(BaseModel):
     facing: Facing
+    zoom_up: bool
     confidence: float
     uncertain: bool
     neighbors: list[NeighborOut] | None = None
@@ -30,6 +32,7 @@ class PredictResponse(BaseModel):
 class LabelResponse(BaseModel):
     sample_id: int
     facing: Facing
+    zoom_up: bool
     deduped: bool
     flip_added: bool
     project_size: int
@@ -57,7 +60,7 @@ class ProjectSummary(BaseModel):
     project: str
     description: str | None
     sample_count: int
-    label_count: int  # flip 拡張を除いた人/取り込みラベル数
+    label_count: int
     k: int | None
     created_at: str
 

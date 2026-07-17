@@ -13,10 +13,12 @@ def _b64(side: str) -> str:
     return base64.b64encode(image_bytes(make_image(side))).decode("ascii")
 
 
-def _label(client, project, key, side, facing, external_id=None):
+def _label(client, project, key, side, facing, external_id=None, zoom_up=None):
     body = {"image_base64": _b64(side), "facing": facing}
     if external_id:
         body["external_id"] = external_id
+    if zoom_up is not None:
+        body["zoom_up"] = zoom_up
     return client.post(f"/v1/{project}/label", json=body, headers={"X-API-Key": key})
 
 
@@ -81,6 +83,16 @@ def test_predict_returns_facing_when_no_labels(client, admin_auth):
     body = _predict(client, "proj", key, "left").json()
     assert body["facing"] in ("left", "right")
     assert body["uncertain"] is True
+    assert body["zoom_up"] is False
+
+
+def test_label_and_predict_full_annotation(client, admin_auth):
+    key = create_project(client, admin_auth)
+    labeled = _label(client, "proj", key, "left", "left", zoom_up=True).json()
+    assert labeled["zoom_up"] is True
+    pred = _predict(client, "proj", key, "left").json()
+    assert pred["facing"] == "left"
+    assert pred["zoom_up"] is True
 
 
 def test_dedup_updates_facing(client, admin_auth):

@@ -1,8 +1,6 @@
 """SQLite アクセス層（docs/database.md）。全 SQL はこのモジュールに集約する。
 
-- 単一プロセス・単一ワーカー前提。FastAPI の sync ハンドラはスレッドプールで動くため、
-  1 本の接続を `check_same_thread=False` + RLock で保護する（低スループットなので十分）。
-- 値は必ずパラメータバインド（文字列連結禁止・docs/security.md）。
+samples はフル注釈: facing + zoom_up（統一ラベル空間）。
 """
 
 from __future__ import annotations
@@ -12,6 +10,8 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+
+from .params import DEFAULT_ZOOM_UP
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS samples (
     project          TEXT NOT NULL,
     image_sha256     TEXT NOT NULL,
     facing           TEXT NOT NULL CHECK (facing IN ('left', 'right')),
+    zoom_up          INTEGER NOT NULL DEFAULT 0,
     source           TEXT NOT NULL DEFAULT 'human',
     is_flip_aug      INTEGER NOT NULL DEFAULT 0,
     origin_sample_id INTEGER,
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS predictions (
     project      TEXT NOT NULL,
     image_sha256 TEXT,
     facing       TEXT NOT NULL,
+    zoom_up      INTEGER NOT NULL DEFAULT 0,
     confidence   REAL NOT NULL,
     uncertain    INTEGER NOT NULL,
     created_at   TEXT NOT NULL
@@ -80,13 +82,31 @@ class Database:
     def init_schema(self) -> None:
         with self._lock:
             self._conn.executescript(SCHEMA)
+            self._migrate_columns()
             self._conn.commit()
+
+    def _table_columns(self, table: str) -> set[str]:
+        rows = self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return {str(r[1]) for r in rows}
+
+    def _migrate_columns(self) -> None:
+        """旧スキーマから zoom_up 列を足す。zoom/scale 時代の DB は wipe 推奨。"""
+        sample_cols = self._table_columns("samples")
+        if "zoom_up" not in sample_cols:
+            default = 1 if DEFAULT_ZOOM_UP else 0
+            self._conn.execute(
+                f"ALTER TABLE samples ADD COLUMN zoom_up INTEGER NOT NULL DEFAULT {default}"
+            )
+        pred_cols = self._table_columns("predictions")
+        if pred_cols and "zoom_up" not in pred_cols:
+            default = 1 if DEFAULT_ZOOM_UP else 0
+            self._conn.execute(
+                f"ALTER TABLE predictions ADD COLUMN zoom_up INTEGER NOT NULL DEFAULT {default}"
+            )
 
     def close(self) -> None:
         with self._lock:
             self._conn.close()
-
-    # --- 低レベルヘルパ ---------------------------------------------------
 
     def _execute(self, sql: str, params: Iterable[Any] = ()) -> sqlite3.Cursor:
         with self._lock:
@@ -101,8 +121,6 @@ class Database:
     def _query_all(self, sql: str, params: Iterable[Any] = ()) -> list[sqlite3.Row]:
         with self._lock:
             return self._conn.execute(sql, tuple(params)).fetchall()
-
-    # --- projects --------------------------------------------------------
 
     def create_project(
         self,
@@ -146,8 +164,6 @@ class Database:
         row = self._query_one(sql, params)
         return int(row["n"]) if row else 0
 
-    # --- samples / embeddings -------------------------------------------
-
     def find_sample_by_sha(
         self, project: str, sha: str, *, is_flip_aug: int = 0
     ) -> sqlite3.Row | None:
@@ -166,6 +182,7 @@ class Database:
         project: str,
         image_sha256: str,
         facing: str,
+        zoom_up: bool,
         source: str,
         is_flip_aug: int,
         origin_sample_id: int | None,
@@ -176,14 +193,15 @@ class Database:
             cur = self._conn.execute(
                 """
                 INSERT INTO samples
-                    (project, image_sha256, facing, source, is_flip_aug,
+                    (project, image_sha256, facing, zoom_up, source, is_flip_aug,
                      origin_sample_id, external_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     project,
                     image_sha256,
                     facing,
+                    int(zoom_up),
                     source,
                     is_flip_aug,
                     origin_sample_id,
@@ -195,17 +213,29 @@ class Database:
             self._conn.commit()
             return int(cur.lastrowid)
 
-    def update_sample_facing(self, sample_id: int, facing: str, source: str | None = None) -> None:
+    def update_sample_label(
+        self,
+        sample_id: int,
+        facing: str,
+        zoom_up: bool,
+        source: str | None = None,
+    ) -> None:
         now = utcnow()
         if source is None:
             self._execute(
-                "UPDATE samples SET facing = ?, updated_at = ? WHERE id = ?",
-                (facing, now, sample_id),
+                """
+                UPDATE samples SET facing = ?, zoom_up = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (facing, int(zoom_up), now, sample_id),
             )
         else:
             self._execute(
-                "UPDATE samples SET facing = ?, source = ?, updated_at = ? WHERE id = ?",
-                (facing, source, now, sample_id),
+                """
+                UPDATE samples SET facing = ?, zoom_up = ?, source = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (facing, int(zoom_up), source, now, sample_id),
             )
 
     def get_sample(self, sample_id: int) -> sqlite3.Row | None:
@@ -218,7 +248,6 @@ class Database:
         )
 
     def delete_sample(self, sample_id: int) -> None:
-        # embeddings は ON DELETE CASCADE（PRAGMA foreign_keys=ON）で同時に消える。
         self._execute("DELETE FROM samples WHERE id = ?", (sample_id,))
 
     def list_samples(
@@ -249,10 +278,9 @@ class Database:
         )
 
     def iter_embeddings_for_project(self, project: str) -> list[sqlite3.Row]:
-        """store のウォームアップ用。sample メタと埋め込みを join して返す。"""
         return self._query_all(
             """
-            SELECT s.id AS sample_id, s.facing, s.is_flip_aug, s.origin_sample_id,
+            SELECT s.id AS sample_id, s.facing, s.zoom_up, s.is_flip_aug, s.origin_sample_id,
                    e.model_name, e.embed_version, e.dim, e.vector
             FROM samples s
             JOIN embeddings e ON e.sample_id = s.id
@@ -266,15 +294,28 @@ class Database:
         rows = self._query_all("SELECT DISTINCT project FROM samples")
         return [r["project"] for r in rows]
 
-    # --- predictions（任意・監査ログ）-----------------------------------
-
     def insert_prediction(
-        self, project: str, image_sha256: str | None, facing: str, confidence: float, uncertain: bool
+        self,
+        project: str,
+        image_sha256: str | None,
+        facing: str,
+        zoom_up: bool,
+        confidence: float,
+        uncertain: bool,
     ) -> None:
         self._execute(
             """
-            INSERT INTO predictions (project, image_sha256, facing, confidence, uncertain, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO predictions
+                (project, image_sha256, facing, zoom_up, confidence, uncertain, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (project, image_sha256, facing, confidence, int(uncertain), utcnow()),
+            (
+                project,
+                image_sha256,
+                facing,
+                int(zoom_up),
+                confidence,
+                int(uncertain),
+                utcnow(),
+            ),
         )

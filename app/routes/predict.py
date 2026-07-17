@@ -1,4 +1,4 @@
-"""POST /v1/{project}/predict（判定・学習データには加えない）。"""
+"""POST /v1/{project}/predict。"""
 
 from __future__ import annotations
 
@@ -33,22 +33,32 @@ async def predict(project: str, request: Request) -> PredictResponse:
     svc = get_service(request)
     result = svc.predict(project, data, project_row)
 
-    # 監査ログ（任意）。画像本体は保存せずハッシュのみ。
     from ..images import sha256_hex
 
     request.app.state.db.insert_prediction(
-        project, sha256_hex(data), result.facing, result.confidence, result.uncertain
+        project,
+        sha256_hex(data),
+        result.facing,
+        result.zoom_up,
+        result.confidence,
+        result.uncertain,
     )
 
     neighbors = None
     if include_neighbors:
         neighbors = [
-            NeighborOut(sample_id=n.sample_id, facing=n.facing, similarity=n.similarity)
+            NeighborOut(
+                sample_id=n.sample_id,
+                facing=n.facing,  # type: ignore[arg-type]
+                zoom_up=n.zoom_up,
+                similarity=n.similarity,
+            )
             for n in result.neighbors
         ]
 
     return PredictResponse(
-        facing=result.facing,
+        facing=result.facing,  # type: ignore[arg-type]
+        zoom_up=result.zoom_up,
         confidence=result.confidence,
         uncertain=result.uncertain,
         neighbors=neighbors,

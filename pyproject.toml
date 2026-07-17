@@ -20,6 +20,7 @@ dependencies = [
 # 本番ランタイムには入れない。ONNX 変換スクリプト（scripts/export_dinov2_onnx.py）専用。
 export = [
     "torch>=2.2",
+    "onnx>=1.16",  # torch.onnx.export が実行時に要求する
 ]
 dev = [
     "pytest>=8.0",

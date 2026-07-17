@@ -23,7 +23,8 @@ from .store import Store
 
 logger = logging.getLogger("facing")
 
-_DEFAULT_DIM = 384
+# モデル未配置時の store 次元。本番は embedder.dim（ViT-B=768）を使う。
+_DEFAULT_DIM = 768
 
 
 def _default_embedder_factory(settings: Settings) -> Embedder | None:

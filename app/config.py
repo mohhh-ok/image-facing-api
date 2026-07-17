@@ -72,9 +72,10 @@ def get_settings() -> Settings:
     return Settings(
         port=_int("PORT", 8000),
         data_dir=data_dir,
-        model_path=Path(os.environ.get("MODEL_PATH", "models/dinov2_vits14.onnx")),
-        model_name=os.environ.get("MODEL_NAME", "dinov2_vits14"),
-        embed_version=_int("EMBED_VERSION", 1),
+        # 既定は DINOv2 ViT-B/14（768 dim）。旧 S(384) データは dim 不一致で読み飛ばすので wipe 推奨。
+        model_path=Path(os.environ.get("MODEL_PATH", "models/dinov2_vitb14.onnx")),
+        model_name=os.environ.get("MODEL_NAME", "dinov2_vitb14"),
+        embed_version=_int("EMBED_VERSION", 2),
         knn_k=_int("KNN_K", 9),
         uncertain_threshold=_float("UNCERTAIN_THRESHOLD", 0.55),
         max_image_bytes=_int("MAX_IMAGE_BYTES", 10 * 1024 * 1024),
